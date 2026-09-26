@@ -79,8 +79,11 @@
     if (role) {
       cardClasses += ` role-${role}`;
     }
-    const resonanceTargets = rawData.associativeLineTargets || rawData.resonanceLinks;
-    if (resonanceTargets && resonanceTargets.length > 0) {
+    const rawResonanceTargets = rawData.associativeLineTargets || rawData.resonanceLinks;
+    const resonanceTargets = Array.isArray(rawResonanceTargets)
+      ? Array.from(new Set(rawResonanceTargets.filter(uid => uid && uid !== rawData.uid)))
+      : [];
+    if (resonanceTargets.length > 0) {
       cardClasses += ' has-resonance-targets';
     }
     cardEl.className = cardClasses;

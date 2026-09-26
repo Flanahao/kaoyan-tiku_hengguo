@@ -28,7 +28,7 @@
       trend: "高频必考",
       questionCount: 32,
       questionRefIds: ["2024_math1_01", "2023_math3_15", "2022_math2_02"],
-      associativeLineTargets: ["sec_2_limit", "m_gs01_03", "m_gs01_04", "m_gs01_05", "k_equiv_table", "k_taylor_table"]
+      associativeLineTargets: ["m_gs01_03", "m_gs01_04", "m_gs01_05", "k_equiv_table", "k_taylor_table"]
     },
     {
       uid: "kp_gs01_02",
@@ -37,7 +37,7 @@
       trend: "经典常考",
       questionCount: 18,
       questionRefIds: ["2023_math1_11", "2021_math2_10"],
-      associativeLineTargets: ["sec_2_limit", "m_gs01_16", "m_gs01_01", "k_taylor_table"]
+      associativeLineTargets: ["m_gs01_16", "m_gs01_01", "k_taylor_table"]
     },
     {
       uid: "kp_gs01_03",
@@ -46,7 +46,7 @@
       trend: "上升趋势",
       questionCount: 14,
       questionRefIds: ["2022_math1_01", "2020_math3_03"],
-      associativeLineTargets: ["sec_1_func", "sec_3_cont", "m_gs01_02", "k_fn_properties", "k_discontinuity_types"]
+      associativeLineTargets: ["m_gs01_02", "k_fn_properties", "k_discontinuity_types"]
     },
     {
       uid: "kp_gs01_04",
@@ -55,7 +55,7 @@
       trend: "基础常考",
       questionCount: 21,
       questionRefIds: ["2024_math2_03", "2021_math1_02"],
-      associativeLineTargets: ["sec_3_cont", "m_gs01_13", "k_discontinuity_types"]
+      associativeLineTargets: ["m_gs01_13", "k_discontinuity_types"]
     },
     {
       uid: "kp_gs01_05",
@@ -64,7 +64,7 @@
       trend: "综合大题常用",
       questionCount: 9,
       questionRefIds: ["2020_math1_16"],
-      associativeLineTargets: ["sec_3_cont", "m_gs01_02", "k_closed_interval_thm"]
+      associativeLineTargets: ["m_gs01_02", "k_closed_interval_thm"]
     }
   ];
 
@@ -87,7 +87,6 @@
           tag: "考点",
           tagType: "exam",
           dir: "right",
-          associativeLineTargets: ["sec_2_limit", "branch_methods"],
           expand: true
         },
         children: [
@@ -98,8 +97,8 @@
               tag: "5★ 必考",
               tagType: "exam",
               questionCount: 32,
-              resonanceLinks: ["sec_2_limit", "m_gs01_03", "m_gs01_04", "m_gs01_05", "k_equiv_table", "k_taylor_table"],
-              associativeLineTargets: ["sec_2_limit", "m_gs01_03", "m_gs01_04", "m_gs01_05", "k_equiv_table", "k_taylor_table"],
+              resonanceLinks: ["m_gs01_03", "m_gs01_04", "m_gs01_05", "k_equiv_table", "k_taylor_table"],
+              associativeLineTargets: ["m_gs01_03", "m_gs01_04", "m_gs01_05", "k_equiv_table", "k_taylor_table"],
               expand: false
             },
             children: [
@@ -130,8 +129,8 @@
               tag: "4★ 常考",
               tagType: "exam",
               questionCount: 18,
-              resonanceLinks: ["sec_2_limit", "m_gs01_16", "m_gs01_01", "k_taylor_table"],
-              associativeLineTargets: ["sec_2_limit", "m_gs01_16", "m_gs01_01", "k_taylor_table"],
+              resonanceLinks: ["m_gs01_16", "m_gs01_01", "k_taylor_table"],
+              associativeLineTargets: ["m_gs01_16", "m_gs01_01", "k_taylor_table"],
               expand: false
             },
             children: [
@@ -162,8 +161,8 @@
               tag: "4★ 上升",
               tagType: "exam",
               questionCount: 14,
-              resonanceLinks: ["sec_1_func", "sec_3_cont", "m_gs01_02", "k_fn_properties", "k_discontinuity_types"],
-              associativeLineTargets: ["sec_1_func", "sec_3_cont", "m_gs01_02", "k_fn_properties", "k_discontinuity_types"],
+              resonanceLinks: ["m_gs01_02", "k_fn_properties", "k_discontinuity_types"],
+              associativeLineTargets: ["m_gs01_02", "k_fn_properties", "k_discontinuity_types"],
               expand: false
             },
             children: [
@@ -194,8 +193,8 @@
               tag: "4★ 基础",
               tagType: "exam",
               questionCount: 21,
-              resonanceLinks: ["sec_3_cont", "m_gs01_13", "k_discontinuity_types"],
-              associativeLineTargets: ["sec_3_cont", "m_gs01_13", "k_discontinuity_types"],
+              resonanceLinks: ["m_gs01_13", "k_discontinuity_types"],
+              associativeLineTargets: ["m_gs01_13", "k_discontinuity_types"],
               expand: false
             },
             children: [
@@ -226,8 +225,8 @@
               tag: "3★ 综合",
               tagType: "exam",
               questionCount: 9,
-              resonanceLinks: ["sec_3_cont", "m_gs01_02", "k_closed_interval_thm"],
-              associativeLineTargets: ["sec_3_cont", "m_gs01_02", "k_closed_interval_thm"],
+              resonanceLinks: ["m_gs01_02", "k_closed_interval_thm"],
+              associativeLineTargets: ["m_gs01_02", "k_closed_interval_thm"],
               expand: false
             },
             children: [

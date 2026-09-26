@@ -276,14 +276,22 @@
       walk(tree);
 
       var validEdges = [];
+      var seenUndirectedPairs = new Set();
       rawEdges.forEach(function (e) {
+        if (!e.fromUid || !e.toUid || e.fromUid === e.toUid) return;
         var toNode = idToNode.get(e.toUid);
         if (toNode && e.fromNode) {
+          var pairKey = e.fromUid < e.toUid
+            ? (e.fromUid + '<->' + e.toUid)
+            : (e.toUid + '<->' + e.fromUid);
+          if (seenUndirectedPairs.has(pairKey)) return;
+          seenUndirectedPairs.add(pairKey);
           validEdges.push({
             fromNode: e.fromNode,
             toNode: toNode,
             fromUid: e.fromUid,
-            toUid: e.toUid
+            toUid: e.toUid,
+            pairKey: pairKey
           });
         }
       });
@@ -698,9 +706,40 @@
     return null;
   }
 
+  // 构建全树无向关联邻接表：保证无论关联定义在哪一端，双向查询完全对称
+  function buildUndirectedAdjacencyMap(treeNode, adjMap) {
+    var map = adjMap || new Map();
+    if (!treeNode) return map;
+    var d = treeNode.data || {};
+    var u = d.uid || '';
+    if (u) {
+      if (!map.has(u)) map.set(u, new Set());
+      var rawTargets = [];
+      if (Array.isArray(d.resonanceLinks)) rawTargets = rawTargets.concat(d.resonanceLinks);
+      if (Array.isArray(d.associativeLineTargets)) rawTargets = rawTargets.concat(d.associativeLineTargets);
+      rawTargets.forEach(function (v) {
+        if (!v || v === u) return;
+        map.get(u).add(v);
+        if (!map.has(v)) map.set(v, new Set());
+        map.get(v).add(u);
+      });
+    }
+    if (Array.isArray(treeNode.children)) {
+      for (var i = 0; i < treeNode.children.length; i++) {
+        buildUndirectedAdjacencyMap(treeNode.children[i], map);
+      }
+    }
+    return map;
+  }
+
   function getTargetsByUid(uid) {
+    if (!uid) return [];
     if (mindMapInstance) {
       var curTree = mindMapInstance.getData(false);
+      var adjMap = buildUndirectedAdjacencyMap(curTree);
+      if (adjMap.has(uid) && adjMap.get(uid).size > 0) {
+        return Array.from(adjMap.get(uid));
+      }
       var nodeData = findNodeDataByUid(curTree, uid);
       if (nodeData) {
         if (Array.isArray(nodeData.resonanceLinks) && nodeData.resonanceLinks.length > 0) {
@@ -714,6 +753,10 @@
     var data = (currentActiveSubject === 'english' && window.TangJingTranslationMindMapData)
       ? window.TangJingTranslationMindMapData
       : window.Chapter1MindMapData;
+    var fallbackAdj = buildUndirectedAdjacencyMap(data);
+    if (fallbackAdj.has(uid) && fallbackAdj.get(uid).size > 0) {
+      return Array.from(fallbackAdj.get(uid));
+    }
     var examPoints = (data && data.data && data.data.examPoints) || [];
     var kp = examPoints.find(function (p) { return p.uid === uid; });
     return kp ? (kp.associativeLineTargets || []) : [];
