@@ -118,7 +118,10 @@
   }
 
   function measureTargetCardsBounds(allowedUidSet) {
-    var cards = document.querySelectorAll('#cognitiveMindMapContainer .smm-node .mm-node-card');
+    var cards = document.querySelectorAll('#cognitiveMindMapContainer .smm-node-container .mm-node-card');
+    if (!cards || cards.length === 0) {
+      cards = document.querySelectorAll('#cognitiveMindMapContainer svg .mm-node-card');
+    }
     var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     var count = 0;
     for (var i = 0; i < cards.length; i++) {
@@ -148,6 +151,45 @@
     };
   }
 
+  function measureWorldSubtreeBounds(allowedUidSet) {
+    var rootNode = mindMapInstance && mindMapInstance.renderer && mindMapInstance.renderer.root;
+    if (!rootNode) return null;
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    var count = 0;
+
+    function walk(node) {
+      if (!node) return;
+      var uid = (typeof node.getData === 'function' ? node.getData('uid') : '') ||
+                (node.nodeData && node.nodeData.data && node.nodeData.data.uid) || '';
+      var include = !allowedUidSet || (uid && allowedUidSet.has(uid));
+      if (include && typeof node.left === 'number' && typeof node.top === 'number' && node.width > 0 && node.height > 0) {
+        if (node.left < minX) minX = node.left;
+        if (node.top < minY) minY = node.top;
+        if (node.left + node.width > maxX) maxX = node.left + node.width;
+        if (node.top + node.height > maxY) maxY = node.top + node.height;
+        count++;
+      }
+      var isExpanded = (typeof node.getData === 'function' ? node.getData('expand') : true) !== false;
+      if (isExpanded && Array.isArray(node.children)) {
+        for (var i = 0; i < node.children.length; i++) {
+          walk(node.children[i]);
+        }
+      }
+    }
+
+    walk(rootNode);
+    if (count === 0) return null;
+    return {
+      minX: minX,
+      minY: minY,
+      maxX: maxX,
+      maxY: maxY,
+      width: Math.max(1, maxX - minX),
+      height: Math.max(1, maxY - minY),
+      count: count
+    };
+  }
+
   function getCustomNodesRbox() {
     var b = measureTargetCardsBounds(null);
     if (!b) return null;
@@ -160,7 +202,8 @@
     };
   }
 
-  // 目标子树/全图智能相机定焦：仅对目标节点分配视野，支持可读缩放保底 (minReadableScale) 与超高分支顶部对齐
+  // 目标子树/全图智能相机定焦：基于 SimpleMindMap 布局树世界坐标一次性精确求解 (scale, x, y)，
+  // 排除非目标分支与离屏缓存干扰，支持可读缩放保底 (minReadableScale) 与超高分支顶部对齐
   function fitSubtreeToViewport(targetRootUids, options) {
     if (!mindMapInstance || !mindMapInstance.view) return;
     var opts = options || {};
@@ -168,76 +211,64 @@
     var minReadableScale = typeof opts.minReadableScale === 'number' ? opts.minReadableScale : 0;
     var maxScale = typeof opts.maxScale === 'number' ? opts.maxScale : 1.08;
     var verticalAnchor = opts.verticalAnchor || 'auto'; // 'auto' | 'top' | 'center'
+    var allowHorizontalOverflow = Boolean(opts.allowHorizontalOverflow);
 
     var allowedUidSet = collectSubtreeUidSet(targetRootUids);
-    var getTargetRbox = function () {
-      var b = measureTargetCardsBounds(allowedUidSet) || measureTargetCardsBounds(null);
-      if (!b) return null;
-      return {
-        x: b.minX,
-        y: b.minY - 18,
-        width: b.width,
-        height: Math.max(1, b.height + 36)
-      };
-    };
+    var wb = measureWorldSubtreeBounds(allowedUidSet) || measureWorldSubtreeBounds(null);
 
-    // 第一步：利用原生 view.fit 针对目标子树（排除非目标分支）做基础居中适配
-    mindMapInstance.view.fit(getTargetRbox, false, pad);
+    if (wb) {
+      var container = document.getElementById('cognitiveMindMapContainer');
+      var cRect = container ? container.getBoundingClientRect() : null;
+      var vw = (cRect && cRect.width > 0) ? cRect.width : (mindMapInstance.width || 1440);
+      var vh = (cRect && cRect.height > 0) ? cRect.height : (mindMapInstance.height || 900);
 
-    // 第二步：若设置了可读缩放保底/上限或顶部对齐，对缩放率与平移位置做闭环精修
-    var container = document.getElementById('cognitiveMindMapContainer');
-    var cRect = container ? container.getBoundingClientRect() : null;
-    var vw = (cRect && cRect.width > 0) ? cRect.width : 1440;
-    var vh = (cRect && cRect.height > 0) ? cRect.height : 900;
-    var cLeft = cRect ? cRect.left : 0;
-    var cTop = cRect ? cRect.top : 0;
+      var padX = pad;
+      var topPad = Math.max(44, pad);
+      var bottomPad = Math.max(64, pad + 18);
+      var availW = Math.max(240, vw - padX * 2);
+      var availH = Math.max(240, vh - topPad - bottomPad);
 
-    var bAfterFit = measureTargetCardsBounds(allowedUidSet) || measureTargetCardsBounds(null);
-    if (bAfterFit) {
-      var curScale = (mindMapInstance.view && typeof mindMapInstance.view.scale === 'number')
-        ? mindMapInstance.view.scale
-        : 1;
-      var availW = Math.max(240, vw - pad * 2);
-      var availH = Math.max(240, vh - pad * 2 - 24);
-      var worldW = bAfterFit.width / Math.max(0.1, curScale);
-      var scaleToFitWidth = availW / Math.max(1, worldW);
+      var scaleToFitW = availW / Math.max(1, wb.width);
+      var scaleToFitH = availH / Math.max(1, wb.height);
+      var targetScale = Math.min(scaleToFitW, scaleToFitH);
 
-      var targetScale = curScale;
       if (minReadableScale > 0 && targetScale < minReadableScale) {
-        targetScale = Math.min(scaleToFitWidth, minReadableScale);
+        targetScale = allowHorizontalOverflow ? minReadableScale : Math.min(scaleToFitW, minReadableScale);
       }
       if (maxScale > 0 && targetScale > maxScale) {
         targetScale = maxScale;
       }
       targetScale = Math.max(0.25, targetScale);
 
-      if (Math.abs(targetScale - curScale) > 0.01 && typeof mindMapInstance.view.setScale === 'function') {
-        mindMapInstance.view.setScale(targetScale, vw / 2, vh / 2);
-      }
+      var worldCenterX = (wb.minX + wb.maxX) / 2;
+      var worldCenterY = (wb.minY + wb.maxY) / 2;
+      var targetX = (vw / 2) - worldCenterX * targetScale;
 
-      // 重新测量精修缩放后的目标子树真实屏幕坐标，计算精准位移
-      var bFinal = measureTargetCardsBounds(allowedUidSet) || bAfterFit;
-      var targetCenterX = cLeft + vw / 2;
-      var curCenterX = (bFinal.minX + bFinal.maxX) / 2;
-      var dx = targetCenterX - curCenterX;
-
-      var isTallSubtree = bFinal.height > availH + 12;
+      var scaledH = wb.height * targetScale;
+      var isTallSubtree = scaledH > availH + 8;
       var shouldAlignTop = (verticalAnchor === 'top' && isTallSubtree) ||
                            (verticalAnchor === 'auto' && minReadableScale > 0 && isTallSubtree);
 
-      var dy = 0;
+      var targetY;
       if (shouldAlignTop) {
-        var targetTopY = cTop + pad;
-        dy = targetTopY - bFinal.minY;
+        targetY = topPad - wb.minY * targetScale;
       } else {
-        var targetCenterY = cTop + (vh - 20) / 2;
-        var curCenterY = (bFinal.minY + bFinal.maxY) / 2;
-        dy = targetCenterY - curCenterY;
+        var viewportCenterY = (topPad + (vh - bottomPad)) / 2;
+        targetY = viewportCenterY - worldCenterY * targetScale;
       }
 
-      if ((Math.abs(dx) > 1 || Math.abs(dy) > 1) && typeof mindMapInstance.view.translateXY === 'function') {
-        mindMapInstance.view.translateXY(dx, dy);
+      mindMapInstance.view.scale = targetScale;
+      mindMapInstance.view.x = targetX;
+      mindMapInstance.view.y = targetY;
+      if (typeof mindMapInstance.view.transform === 'function') {
+        mindMapInstance.view.transform();
       }
+      if (typeof mindMapInstance.view.emitEvent === 'function') {
+        mindMapInstance.view.emitEvent('scale');
+        mindMapInstance.view.emitEvent('translate');
+      }
+    } else if (typeof mindMapInstance.view.fit === 'function') {
+      mindMapInstance.view.fit(getCustomNodesRbox, false, pad);
     }
 
     if (structureController) structureController.updateZoomDisplay();
@@ -262,13 +293,17 @@
       pendingFitOnRender = false;
       fn();
       pendingViewportTimer = setTimeout(function () {
+        pendingViewportTimer = null;
         fn();
       }, 80);
       return;
     }
     pendingViewportTimer = setTimeout(function () {
-      pendingFitOnRender = false;
-      fn();
+      pendingViewportTimer = null;
+      if (pendingFitOnRender) {
+        pendingFitOnRender = false;
+        fn();
+      }
     }, 320);
   }
 
@@ -883,7 +918,7 @@
         onLevelChange: function (lvl) {
           updateLevelButtonsUI(lvl);
           if (lvl === 3) {
-            scheduleFitView(48, { minReadableScale: 0.76, maxScale: 1.0, verticalAnchor: 'top' });
+            scheduleFitView(48, { minReadableScale: 0.76, maxScale: 1.0, verticalAnchor: 'top', allowHorizontalOverflow: true });
           } else if (lvl === 0) {
             scheduleFitView(48, { minReadableScale: 0, maxScale: 1.0, verticalAnchor: 'center' });
           } else {
@@ -959,6 +994,10 @@
     mindMapInstance.on('node_tree_render_end', function () {
       if (pendingFitOnRender && mindMapInstance && mindMapInstance.view) {
         pendingFitOnRender = false;
+        if (pendingViewportTimer) {
+          clearTimeout(pendingViewportTimer);
+          pendingViewportTimer = null;
+        }
         if (typeof pendingViewportAction === 'function') {
           pendingViewportAction();
         } else {
@@ -1136,6 +1175,10 @@
 
   function toggleNexusLines(force) {
     return toggleAssociativeLines(force);
+  }
+
+  function updateNexusLines() {
+    syncAssociativeLinesState();
   }
 
   function syncAssociativeLinesState() {

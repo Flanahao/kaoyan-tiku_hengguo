@@ -473,8 +473,8 @@ async function runTests() {
 
     await captureScreenshot(ws, 'chapter1_expanded_subnodes.png');
 
-    // 切回一览全局以测拓扑聚焦与几何弹窗
-    await evaluate(ws, `window.CognitiveViewController.expandToLevel(1)`);
+    // 切回一览全局（Level 2 核心全景）以测拓扑聚焦与几何弹窗
+    await evaluate(ws, `window.CognitiveViewController.expandToLevel(2)`);
     await sleep(600);
 
     // ─────────────────────────────────────────────────────────────
@@ -608,11 +608,13 @@ async function runTests() {
       }))()
     `);
 
-    // 在认知视图开启时连续发送底层题库敏感快捷键：'1' (熟练)、'd' (下一题)、'j' (下一题)、'm' (切换大纲/SM2)、'h' (导图帮助/题库帮助)
+    // 在认知视图开启时连续发送底层题库敏感快捷键：'1' / '2' (熟练/生疏)、'd' (下一题)、'j' (下一题)、'm' (切换大纲/SM2)、'h' (导图帮助/题库帮助)
     await dispatchKey(ws, '1', 'Digit1', 49);
+    await sleep(300);
+    await dispatchKey(ws, '2', 'Digit2', 50);
     await dispatchKey(ws, 'd', 'KeyD', 68);
     await dispatchKey(ws, 'j', 'KeyJ', 74);
-    await sleep(300);
+    await sleep(400);
 
     // 按 M 切换至纯白大纲视图，再按 M 切回导图视图
     await dispatchKey(ws, 'm', 'KeyM', 77);
@@ -823,70 +825,220 @@ async function runTests() {
     console.log('  PASS: 原生滚轮平滑缩放、点击画布收起抽屉与原生关联线 L 键切换及点击节点按需透出校验通过');
 
     // ─────────────────────────────────────────────────────────────
-    // 测试用例 9：单键 Q / W / E 全量展开与单键 1 / 2 / 3 层级控制专项验证
+    // 测试用例 9：单键 Q / W / E 目标子树专属配框 + 连按切分节 + ~/1/2/3 四阶渐进层级
     // ─────────────────────────────────────────────────────────────
-    console.log('\n[Test 9] 校验单键 Q / W / E 全量展开与单键 1 / 2 / 3 层级控制...');
+    console.log('\n[Test 9] 校验单键 Q / W / E 目标子树专属配框、连按切分节与 ~/1/2/3 四阶渐进层级...');
 
-    // 1. 单键 Q: 知识点全量递归展开到底，考点与解法保持概览态
+    // 1. 单键 Q (第1次): 知识点全量递归展开到底，目标子树专属配框 + 顶部对齐 + 可读字号保底；右翼保持语义二级
     await dispatchKey(ws, 'q', 'KeyQ', 81);
     await sleep(600);
     const qState = await evaluate(ws, `
       (() => {
+        const mm = window.CognitiveViewController.getInstance();
+        const container = document.getElementById('cognitiveMindMapContainer');
+        const cRect = container.getBoundingClientRect();
         const sec1Sub = document.querySelector('#cognitiveMindMapContainer [data-node-uid="k_fn_concept"]');
         const deepLeaf = document.querySelector('#cognitiveMindMapContainer [data-node-uid="k_lim_crit_squeeze"]');
+        const kp01Card = document.querySelector('#cognitiveMindMapContainer [data-node-uid="kp_gs01_01"]');
         const kp01Ref = document.querySelector('#cognitiveMindMapContainer [data-node-uid="kp_gs01_01_ref"]');
+        const m01Card = document.querySelector('#cognitiveMindMapContainer [data-node-uid="m_gs01_01"]');
+        const measureBranch = (branchUid) => {
+          const uids = new Set();
+          const walk = (n, inside) => {
+            if (!n) return;
+            const u = (n.getData && n.getData('uid')) || (n.nodeData && n.nodeData.data && n.nodeData.data.uid) || '';
+            const hit = inside || u === branchUid;
+            if (hit && u) uids.add(u);
+            (n.children || []).forEach(c => walk(c, hit));
+          };
+          walk(mm.renderer.root, false);
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          document.querySelectorAll('#cognitiveMindMapContainer .smm-node-container .mm-node-card').forEach(c => {
+            if (!uids.has(c.getAttribute('data-node-uid'))) return;
+            const r = c.getBoundingClientRect();
+            if (r.left < minX) minX = r.left;
+            if (r.top < minY) minY = r.top;
+            if (r.right > maxX) maxX = r.right;
+            if (r.bottom > maxY) maxY = r.bottom;
+          });
+          return { centerX: (minX + maxX) / 2, minY: minY - cRect.top, height: maxY - minY };
+        };
+        const b = measureBranch('branch_knowledge');
         return {
           knowledgeExpanded: Boolean(sec1Sub),
           deepLeafExpanded: Boolean(deepLeaf),
-          examFolded: !kp01Ref
+          rightSemanticLevel2Kept: Boolean(kp01Card && m01Card),
+          examFolded: !kp01Ref,
+          scale: mm.view.scale,
+          viewportCenterX: cRect.left + cRect.width / 2,
+          subtreeCenterX: b.centerX || 0,
+          subtreeTopOffset: b.minY || 0
         };
       })()
     `);
-    console.log(`  - 单键 Q (知识点全量展开): 二级小节可见=${qState.knowledgeExpanded}, 深度卡片可见=${qState.deepLeafExpanded}, 考点细节折叠=${qState.examFolded}`);
-    if (!qState.knowledgeExpanded || !qState.deepLeafExpanded) throw new Error('单键 Q 未能将知识点分类全量递归展开到底');
+    console.log(`  - 单键 Q [第1次·全知识库]: 展开=${qState.knowledgeExpanded && qState.deepLeafExpanded}, 右翼保持语义二级=${qState.rightSemanticLevel2Kept}, 缩放=${(qState.scale * 100).toFixed(0)}%, 水平偏移=${Math.abs(qState.subtreeCenterX - qState.viewportCenterX).toFixed(1)}px, 顶部边距=${qState.subtreeTopOffset.toFixed(1)}px`);
+    if (!qState.knowledgeExpanded || !qState.deepLeafExpanded || !qState.rightSemanticLevel2Kept || !qState.examFolded) {
+      throw new Error('单键 Q 未能将知识点递归展开到底或未保持右翼语义二级');
+    }
+    if (qState.scale < 0.80 || Math.abs(qState.subtreeCenterX - qState.viewportCenterX) > 90 || qState.subtreeTopOffset < 15 || qState.subtreeTopOffset > 95) {
+      throw new Error(`单键 Q 目标子树专属配框或顶部对齐异常: scale=${qState.scale}, centerDiff=${Math.abs(qState.subtreeCenterX - qState.viewportCenterX)}, topOffset=${qState.subtreeTopOffset}`);
+    }
+    await captureScreenshot(ws, 'chapter1_q_knowledge_focus.png');
 
-    // 2. 单键 W: 考点全量展开，知识点与解法保持概览态
+    // 1b. 连按 Q (第2次 -> §1 函数, 第3次 -> §2 极限, 第4次 -> §3 连续): 验证同键循环切分节聚焦
+    await dispatchKey(ws, 'q', 'KeyQ', 81);
+    await sleep(400);
+    const qStep1 = await evaluate(ws, `
+      (() => {
+        const mm = window.CognitiveViewController.getInstance();
+        const sec1Card = document.querySelector('#cognitiveMindMapContainer [data-node-uid="sec_1_func"]');
+        const r = sec1Card ? sec1Card.getBoundingClientRect() : null;
+        return { scale: mm.view.scale, sec1Y: r ? (r.top + r.bottom) / 2 : 0 };
+      })()
+    `);
+    await dispatchKey(ws, 'q', 'KeyQ', 81);
+    await sleep(400);
+    const qStep2 = await evaluate(ws, `
+      (() => {
+        const mm = window.CognitiveViewController.getInstance();
+        const sec2Card = document.querySelector('#cognitiveMindMapContainer [data-node-uid="sec_2_limit"]');
+        const r = sec2Card ? sec2Card.getBoundingClientRect() : null;
+        return { scale: mm.view.scale, sec2Y: r ? (r.top + r.bottom) / 2 : 0 };
+      })()
+    `);
+    await captureScreenshot(ws, 'chapter1_q_sec2_limit_focus.png');
+    await dispatchKey(ws, 'q', 'KeyQ', 81);
+    await sleep(400);
+    const qStep3 = await evaluate(ws, `
+      (() => {
+        const mm = window.CognitiveViewController.getInstance();
+        const sec3Card = document.querySelector('#cognitiveMindMapContainer [data-node-uid="sec_3_cont"]');
+        const r = sec3Card ? sec3Card.getBoundingClientRect() : null;
+        return { scale: mm.view.scale, sec3Y: r ? (r.top + r.bottom) / 2 : 0 };
+      })()
+    `);
+    console.log(`  - 连按 Q 循环切分节: §1缩放=${(qStep1.scale * 100).toFixed(0)}%(Y=${qStep1.sec1Y.toFixed(0)}), §2缩放=${(qStep2.scale * 100).toFixed(0)}%(Y=${qStep2.sec2Y.toFixed(0)}), §3缩放=${(qStep3.scale * 100).toFixed(0)}%(Y=${qStep3.sec3Y.toFixed(0)})`);
+    if (qStep1.scale < 0.88 || qStep2.scale < 0.88 || qStep3.scale < 0.88) {
+      throw new Error('连按 Q 分节聚焦缩放比例未达可读预期');
+    }
+
+    // 2. 单键 W: 考点全量展开并独占视口居中，左翼知识点保持语义二级（1.1~3.3 可见，公式折叠）
     await dispatchKey(ws, 'w', 'KeyW', 87);
     await sleep(600);
     const wState = await evaluate(ws, `
       (() => {
+        const mm = window.CognitiveViewController.getInstance();
+        const container = document.getElementById('cognitiveMindMapContainer');
+        const cRect = container.getBoundingClientRect();
         const kp01Card = document.querySelector('#cognitiveMindMapContainer [data-node-uid="kp_gs01_01"]');
         const kp01Ref = document.querySelector('#cognitiveMindMapContainer [data-node-uid="kp_gs01_01_ref"]');
         const sec1Sub = document.querySelector('#cognitiveMindMapContainer [data-node-uid="k_fn_concept"]');
+        const sec1Leaf = document.querySelector('#cognitiveMindMapContainer [data-node-uid="k_fn_concept_1"]');
+        const uids = new Set();
+        const walk = (n, inside) => {
+          if (!n) return;
+          const u = (n.getData && n.getData('uid')) || (n.nodeData && n.nodeData.data && n.nodeData.data.uid) || '';
+          const hit = inside || u === 'branch_exam_points';
+          if (hit && u) uids.add(u);
+          (n.children || []).forEach(c => walk(c, hit));
+        };
+        walk(mm.renderer.root, false);
+        let minX = Infinity, maxX = -Infinity;
+        document.querySelectorAll('#cognitiveMindMapContainer .smm-node-container .mm-node-card').forEach(c => {
+          if (!uids.has(c.getAttribute('data-node-uid'))) return;
+          const r = c.getBoundingClientRect();
+          if (r.left < minX) minX = r.left;
+          if (r.right > maxX) maxX = r.right;
+        });
         return {
           examExpanded: Boolean(kp01Card),
           examLeafExpanded: Boolean(kp01Ref),
-          knowledgeFolded: !sec1Sub
+          leftSemanticLevel2Kept: Boolean(sec1Sub) && !sec1Leaf,
+          scale: mm.view.scale,
+          centerDiffX: Math.abs((minX + maxX) / 2 - (cRect.left + cRect.width / 2))
         };
       })()
     `);
-    console.log(`  - 单键 W (考点全量展开): 考点分支展开=${wState.examExpanded}, 考点题源卡片展开=${wState.examLeafExpanded}, 知识点细节折叠=${wState.knowledgeFolded}`);
-    if (!wState.examExpanded || !wState.examLeafExpanded || !wState.knowledgeFolded) throw new Error('单键 W 未能正确进行考点全量展开并折叠其他分支');
+    console.log(`  - 单键 W (考点全量展开): 考点题源展开=${wState.examLeafExpanded}, 左翼保持1.1~3.3语义二级=${wState.leftSemanticLevel2Kept}, 缩放=${(wState.scale * 100).toFixed(0)}%, 水平居中偏差=${wState.centerDiffX.toFixed(1)}px`);
+    if (!wState.examExpanded || !wState.examLeafExpanded || !wState.leftSemanticLevel2Kept || wState.scale < 0.85 || wState.centerDiffX > 90) {
+      throw new Error(`单键 W 考点展开或语义二级保留异常: ${JSON.stringify(wState)}`);
+    }
+    await captureScreenshot(ws, 'chapter1_w_exam_focus.png');
 
-    // 3. 单键 E: 解法全量展开，知识点与考点保持概览态
+    // 3. 单键 E: 解法全量展开并独占视口配框，左翼知识点与考点保持语义二级
     await dispatchKey(ws, 'e', 'KeyE', 69);
     await sleep(600);
     const eState = await evaluate(ws, `
       (() => {
+        const mm = window.CognitiveViewController.getInstance();
+        const container = document.getElementById('cognitiveMindMapContainer');
+        const cRect = container.getBoundingClientRect();
         const m01Card = document.querySelector('#cognitiveMindMapContainer [data-node-uid="m_gs01_01"]');
         const m01Step = document.querySelector('#cognitiveMindMapContainer [data-node-uid="m_gs01_01_s1"]');
         const kp01Ref = document.querySelector('#cognitiveMindMapContainer [data-node-uid="kp_gs01_01_ref"]');
+        const sec1Sub = document.querySelector('#cognitiveMindMapContainer [data-node-uid="k_fn_concept"]');
+        const uids = new Set();
+        const walk = (n, inside) => {
+          if (!n) return;
+          const u = (n.getData && n.getData('uid')) || (n.nodeData && n.nodeData.data && n.nodeData.data.uid) || '';
+          const hit = inside || u === 'branch_methods';
+          if (hit && u) uids.add(u);
+          (n.children || []).forEach(c => walk(c, hit));
+        };
+        walk(mm.renderer.root, false);
+        let minX = Infinity, maxX = -Infinity;
+        document.querySelectorAll('#cognitiveMindMapContainer .smm-node-container .mm-node-card').forEach(c => {
+          if (!uids.has(c.getAttribute('data-node-uid'))) return;
+          const r = c.getBoundingClientRect();
+          if (r.left < minX) minX = r.left;
+          if (r.right > maxX) maxX = r.right;
+        });
         return {
           methodExpanded: Boolean(m01Card),
           methodStepExpanded: Boolean(m01Step),
-          examFolded: !kp01Ref
+          examFolded: !kp01Ref,
+          leftSemanticLevel2Kept: Boolean(sec1Sub),
+          scale: mm.view.scale,
+          centerDiffX: Math.abs((minX + maxX) / 2 - (cRect.left + cRect.width / 2))
         };
       })()
     `);
-    console.log(`  - 单键 E (解法全量展开): 解法招法展开=${eState.methodExpanded}, 解法步骤卡片展开=${eState.methodStepExpanded}, 考点细节折叠=${eState.examFolded}`);
-    if (!eState.methodExpanded || !eState.methodStepExpanded || !eState.examFolded) throw new Error('单键 E 未能正确进行解法全量展开并折叠其他分支');
-    console.log('  PASS: 单键 Q / W / E 全量递归展开与非目标分类概览收纳完全符合预期');
+    console.log(`  - 单键 E (解法全量展开): 解法步骤展开=${eState.methodStepExpanded}, 左翼保持1.1~3.3=${eState.leftSemanticLevel2Kept}, 缩放=${(eState.scale * 100).toFixed(0)}%, 水平居中偏差=${eState.centerDiffX.toFixed(1)}px`);
+    if (!eState.methodExpanded || !eState.methodStepExpanded || !eState.examFolded || !eState.leftSemanticLevel2Kept || eState.scale < 0.80 || eState.centerDiffX > 90) {
+      throw new Error(`单键 E 解法全量展开或专属配框异常: ${JSON.stringify(eState)}`);
+    }
+    console.log('  PASS: 单键 Q / W / E 目标子树专属配框、顶部对齐、连按切分节与非目标分支语义二级保持完全符合预期');
 
-    // 4. 单键 1: 知识点展开至 1.1~3.3 这一层级，考点展开至 5 大考点，招法展开至 7 大招法（微观公式、真题题源与解法步骤折叠）
+    // 4. 单键 1 (Level 1 — 分节骨架): 左翼展开至 §1~§3（1.1~3.3 折叠），右翼展开至 5大考点 & 7大招法
     await dispatchKey(ws, '1', 'Digit1', 49);
-    await sleep(500);
+    await sleep(550);
     const key1State = await evaluate(ws, `
       (() => {
+        const mm = window.CognitiveViewController.getInstance();
+        const sec1Card = document.querySelector('#cognitiveMindMapContainer [data-node-uid="sec_1_func"]');
+        const sec1Sub = document.querySelector('#cognitiveMindMapContainer [data-node-uid="k_fn_concept"]');
+        const kp01Card = document.querySelector('#cognitiveMindMapContainer [data-node-uid="kp_gs01_01"]');
+        const m01Card = document.querySelector('#cognitiveMindMapContainer [data-node-uid="m_gs01_01"]');
+        return {
+          hasSec1: Boolean(sec1Card),
+          sec1SubFolded: !sec1Sub,
+          hasKp01: Boolean(kp01Card),
+          hasM01: Boolean(m01Card),
+          scale: mm.view.scale
+        };
+      })()
+    `);
+    console.log(`  - 单键 1 (Level 1 分节骨架): 知识分节§1可见=${key1State.hasSec1}, 1.1已折叠=${key1State.sec1SubFolded}, 考点可见=${key1State.hasKp01}, 招法可见=${key1State.hasM01}, 缩放=${(key1State.scale * 100).toFixed(0)}%`);
+    if (!key1State.hasSec1 || !key1State.sec1SubFolded || !key1State.hasKp01 || !key1State.hasM01 || key1State.scale < 0.88) {
+      throw new Error(`单键 1 (Level 1 分节骨架) 行为异常: ${JSON.stringify(key1State)}`);
+    }
+
+    // 5. 单键 2 (Level 2 — 核心全景 · 同级对齐): 左翼展开至 1.1~3.3，右翼展开至 5大考点 & 7大招法，微观叶子折叠
+    await dispatchKey(ws, '2', 'Digit2', 50);
+    await sleep(550);
+    const key2State = await evaluate(ws, `
+      (() => {
+        const mm = window.CognitiveViewController.getInstance();
         const sec1Card = document.querySelector('#cognitiveMindMapContainer [data-node-uid="sec_1_func"]');
         const sec1Sub = document.querySelector('#cognitiveMindMapContainer [data-node-uid="k_fn_concept"]');
         const sec1Leaf = document.querySelector('#cognitiveMindMapContainer [data-node-uid="k_fn_concept_1"]');
@@ -899,35 +1051,67 @@ async function runTests() {
           hasSec1Sub: Boolean(sec1Sub),
           hasKp01: Boolean(kp01Card),
           hasM01: Boolean(m01Card),
-          leavesFolded: !sec1Leaf && !kp01Ref && !m01Step
+          leavesFolded: !sec1Leaf && !kp01Ref && !m01Step,
+          scale: mm.view.scale
         };
       })()
     `);
-    console.log(`  - 单键 1 (知识点展开至1.1层级): 知识分节可见=${key1State.hasSec1}, 知识点1.1可见=${key1State.hasSec1Sub}, 考点可见=${key1State.hasKp01}, 招法可见=${key1State.hasM01}, 叶子细节折叠=${key1State.leavesFolded}`);
-    if (!key1State.hasSec1 || !key1State.hasSec1Sub || !key1State.hasKp01 || !key1State.hasM01 || !key1State.leavesFolded) {
-      throw new Error('单键 1 知识点展开至 1.1 层级对齐行为异常');
+    console.log(`  - 单键 2 (Level 2 核心全景·同级对齐): 1.1可见=${key2State.hasSec1Sub}, 考点可见=${key2State.hasKp01}, 招法可见=${key2State.hasM01}, 叶子折叠=${key2State.leavesFolded}, 缩放=${(key2State.scale * 100).toFixed(0)}%`);
+    if (!key2State.hasSec1 || !key2State.hasSec1Sub || !key2State.hasKp01 || !key2State.hasM01 || !key2State.leavesFolded || key2State.scale < 0.85) {
+      throw new Error(`单键 2 (Level 2 核心全景) 行为异常: ${JSON.stringify(key2State)}`);
     }
 
-    // 5. 单键 2: 展开微观定理公式卡片、考点真题题源卡片与解题步骤卡片
-    await dispatchKey(ws, '2', 'Digit2', 50);
-    await sleep(500);
-    const key2State = await evaluate(ws, `
+    // 6. 单键 3 (Level 3 — 微观精读): 展开全部微观卡片，同时启用 76% 可读字号保底 + 顶部对齐
+    await dispatchKey(ws, '3', 'Digit3', 51);
+    await sleep(600);
+    const key3State = await evaluate(ws, `
       (() => {
+        const mm = window.CognitiveViewController.getInstance();
+        const container = document.getElementById('cognitiveMindMapContainer');
+        const cRect = container.getBoundingClientRect();
         const sec1Leaf = document.querySelector('#cognitiveMindMapContainer [data-node-uid="k_fn_concept_1"]');
         const kp01Ref = document.querySelector('#cognitiveMindMapContainer [data-node-uid="kp_gs01_01_ref"]');
         const m01Step = document.querySelector('#cognitiveMindMapContainer [data-node-uid="m_gs01_01_s1"]');
+        const cards = Array.from(document.querySelectorAll('#cognitiveMindMapContainer .smm-node-container .mm-node-card'));
+        let minY = Infinity;
+        cards.forEach(c => {
+          const r = c.getBoundingClientRect();
+          if (r.top < minY) minY = r.top;
+        });
         return {
           sec1LeafVisible: Boolean(sec1Leaf),
           kp01RefVisible: Boolean(kp01Ref),
-          m01StepVisible: Boolean(m01Step)
+          m01StepVisible: Boolean(m01Step),
+          totalCards: cards.length,
+          scale: mm.view.scale,
+          topOffset: minY - cRect.top
         };
       })()
     `);
-    console.log(`  - 单键 2 (微观公式与真题步骤展现): 知识微观公式可见=${key2State.sec1LeafVisible}, 考点题源卡片可见=${key2State.kp01RefVisible}, 招法步骤卡片可见=${key2State.m01StepVisible}`);
-    if (!key2State.sec1LeafVisible || !key2State.kp01RefVisible || !key2State.m01StepVisible) {
-      throw new Error('单键 2 微观细节展现异常');
+    console.log(`  - 单键 3 (Level 3 微观精读): 节点数=${key3State.totalCards}, 缩放=${(key3State.scale * 100).toFixed(0)}% (保底>=72%), 顶部边距=${key3State.topOffset.toFixed(1)}px`);
+    if (!key3State.sec1LeafVisible || !key3State.kp01RefVisible || !key3State.m01StepVisible || key3State.scale < 0.72 || key3State.topOffset < 15 || key3State.topOffset > 95) {
+      throw new Error(`单键 3 (Level 3 微观精读) 行为异常: ${JSON.stringify(key3State)}`);
     }
-    console.log('  PASS: 单键 1 / 2 层级控制与知识点1.1层级对齐校验通过');
+    await captureScreenshot(ws, 'chapter1_level3_readable_focus.png');
+
+    // 7. 单键 ~ / · (Backquote, 键盘 1 左侧 — 全图鸟瞰): 101 节点全展开并一屏完整收纳
+    await dispatchKey(ws, '`', 'Backquote', 192);
+    await sleep(600);
+    const backquoteState = await evaluate(ws, `
+      (() => {
+        const mm = window.CognitiveViewController.getInstance();
+        const cards = Array.from(document.querySelectorAll('#cognitiveMindMapContainer .smm-node-container .mm-node-card'));
+        return {
+          totalCards: cards.length,
+          scale: mm.view.scale
+        };
+      })()
+    `);
+    console.log(`  - 单键 ~ / · (Backquote 全图鸟瞰): 节点数=${backquoteState.totalCards}, 鸟瞰缩放=${(backquoteState.scale * 100).toFixed(0)}%`);
+    if (backquoteState.totalCards < 100 || backquoteState.scale >= 0.65) {
+      throw new Error(`单键 ~ / · (Backquote 全图鸟瞰) 行为异常: ${JSON.stringify(backquoteState)}`);
+    }
+    console.log('  PASS: ~/1/2/3 四阶渐进层级与可读字号保底 + 顶部对齐校验通过');
 
     // ─────────────────────────────────────────────────────────────
     // 测试用例 7：顶层按 Esc / O 关闭认知视图，验证关闭后题库快捷键恢复正常
