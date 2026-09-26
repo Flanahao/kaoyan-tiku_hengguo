@@ -1,13 +1,11 @@
 /**
- * 飞书思维导图原位编辑与实时悬浮预览胶囊 (FeishuNodeEditor)
+ * 思维导图原位编辑与实时悬浮预览胶囊 (MindMapNodeEditor)
  * 职责：
  * 1. 拦截双击与 Enter/Space 快捷键，唤起原位自适应源码输入框
- * 2. 文本选区智能检测，原位正上方唤起“选区悬浮气泡菜单 (FeishuBubbleMenu)”
+ * 2. 文本选区智能检测，原位正上方唤起“选区悬浮气泡菜单 (BubbleMenu)”
  * 3. 选区富文本排版算法：加粗 (B)、斜体 (I)、下划线 (U)、删除线 (S)、行内代码 (Code)、7 色高亮 (Color)、行内公式 (Math)
  * 4. 依附于节点正下方呈现“实时渲染胶囊 (Live Preview Capsule)”，毫秒级呈现 KaTeX 真实公式与局部排版
- * 5. 语法未闭合或临时断片时优雅容错，不阻断键入
- * 6. 提交或失焦时顺畅触发 SimpleMindMap SET_NODE_TEXT 重新排版
- * 7. 纯原生 Vanilla JS 实现，严格零表情符号规范
+ * 5. 支持 options.container 与 options.isActiveCheck，实现宿主容器级隔离
  */
 (function (global) {
   'use strict';
@@ -21,7 +19,7 @@
     return s;
   }
 
-  const FEISHU_HIGHLIGHT_COLORS = [
+  const HIGHLIGHT_COLORS = [
     { key: 'red', name: '粉', hex: '#ffc5c0', shortcut: 'Alt+R' },
     { key: 'yellow', name: '黄', hex: '#ffe699', shortcut: 'Alt+Y' },
     { key: 'purple', name: '紫', hex: '#f6d5f8', shortcut: 'Alt+P' },
@@ -31,44 +29,55 @@
     { key: 'gray', name: '灰', hex: '#dee2e6', shortcut: 'Alt+O' }
   ];
 
-  class FeishuNodeEditor {
-    constructor(mindMap) {
+  class MindMapNodeEditor {
+    constructor(mindMap, options = {}) {
       if (!mindMap) {
-        throw new Error('[FeishuNodeEditor] 未传入 SimpleMindMap 实例');
+        throw new Error('[MindMapNodeEditor] 未传入 SimpleMindMap 实例');
       }
       this.mindMap = mindMap;
-      this.mindMap.feishuNodeEditor = this;
+      this.options = Object.assign({
+        container: document.body,
+        isActiveCheck: null
+      }, options);
+
+      this.mindMap.mindMapNodeEditor = this;
       this.currentNode = null;
       this.isEditing = false;
-      this.container = document.body;
+      this.container = this.options.container || document.body;
 
       this.initDom();
       this.bindEvents();
     }
 
-    // 初始化编辑框、悬浮预览胶囊及选区悬浮气泡菜单骨架
+    isActive() {
+      if (typeof this.options.isActiveCheck === 'function') {
+        return !!this.options.isActiveCheck();
+      }
+      return true;
+    }
+
     initDom() {
       // 1. 原位源码输入框
       this.inputWrap = document.createElement('div');
-      this.inputWrap.className = 'feishu-editor-wrap';
+      this.inputWrap.className = 'mm-editor-wrap';
       this.inputWrap.style.display = 'none';
 
       this.textarea = document.createElement('textarea');
-      this.textarea.className = 'feishu-editor-input';
+      this.textarea.className = 'mm-editor-input';
       this.textarea.spellcheck = false;
       this.textarea.rows = 1;
       this.inputWrap.appendChild(this.textarea);
 
-      // 2. 悬浮实时渲染胶囊 (纯净公式卡片，无冗余标题)
+      // 2. 悬浮实时渲染胶囊
       this.capsule = document.createElement('div');
-      this.capsule.className = 'feishu-preview-capsule';
+      this.capsule.className = 'mm-preview-capsule';
       this.capsule.style.display = 'none';
       this.capsule.innerHTML = `<div class="capsule-content"></div>`;
       this.capsuleContent = this.capsule.querySelector('.capsule-content');
 
       // 3. 选区悬浮气泡菜单 (Bubble Menu)
       this.bubbleMenu = document.createElement('div');
-      this.bubbleMenu.className = 'feishu-bubble-menu';
+      this.bubbleMenu.className = 'mm-bubble-menu';
       this.bubbleMenu.innerHTML = `
         <button type="button" class="bubble-btn" data-action="bold" title="加粗 (Ctrl+B)">
           <strong style="font-size: 13px;">B</strong>
@@ -93,29 +102,31 @@
         <button type="button" class="bubble-btn" data-action="color-trigger" title="局部文字高亮">
           <span style="font-weight: bold; border-bottom: 2px solid #3370ff; padding-bottom: 1px; font-size: 12px;">A</span>
         </button>
-        <div class="feishu-bubble-popover">
-          ${FEISHU_HIGHLIGHT_COLORS.map(c => `
+        <div class="mm-bubble-popover">
+          ${HIGHLIGHT_COLORS.map(c => `
             <button type="button" class="color-dot color-swatch-btn" data-color="${c.key}" title="${c.name}色 (${c.shortcut})" style="background-color: ${c.hex};">A</button>
           `).join('')}
           <button type="button" class="color-dot color-swatch-btn is-clear" data-color="none" title="清除高亮">&empty;</button>
         </div>
       `;
-      this.bubblePopover = this.bubbleMenu.querySelector('.feishu-bubble-popover');
+      this.bubblePopover = this.bubbleMenu.querySelector('.mm-bubble-popover');
 
       this.container.appendChild(this.inputWrap);
       this.container.appendChild(this.capsule);
       this.container.appendChild(this.bubbleMenu);
     }
 
-    // 绑定事件监听
     bindEvents() {
       // 1. 监听导图节点双击事件
       this.mindMap.on('node_dblclick', (node) => {
+        if (!this.isActive()) return;
         this.show(node);
       });
 
       // 2. 监听回车键与空格键：当有节点处于选中态且未处于编辑态时唤起编辑
       window.addEventListener('keydown', (e) => {
+        if (!this.isActive()) return;
+
         if (this.isEditing) {
           if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -139,6 +150,7 @@
               return;
             }
             e.preventDefault();
+            e.stopPropagation();
             this.show(activeNode);
           }
         }
@@ -150,7 +162,7 @@
         this.updatePreview();
       });
 
-      // 4. 选区变化检测：监听 mouseup、keyup、select
+      // 4. 选区变化检测
       const handleSelectionChange = () => {
         if (this.isEditing) {
           this.checkSelection();
@@ -160,7 +172,7 @@
       this.textarea.addEventListener('keyup', handleSelectionChange);
       this.textarea.addEventListener('select', handleSelectionChange);
 
-      // 5. 气泡菜单防失焦：mousedown 阻止默认事件以维持 textarea 聚焦与选区
+      // 5. 气泡菜单防失焦
       this.bubbleMenu.addEventListener('mousedown', (e) => {
         e.preventDefault();
       });
@@ -205,13 +217,12 @@
       // 8. 点击外部失焦提交
       window.addEventListener('mousedown', (e) => {
         if (!this.isEditing) return;
-        // 若点击的是输入框、胶囊、气泡菜单或底部工具栏，不触发外部提交
         if (this.inputWrap.contains(e.target) ||
             this.capsule.contains(e.target) ||
             this.bubbleMenu.contains(e.target)) {
           return;
         }
-        const bottomToolbar = document.querySelector('.feishu-bottom-toolbar');
+        const bottomToolbar = this.container.querySelector('.mm-bottom-toolbar') || document.querySelector('.mm-bottom-toolbar');
         if (bottomToolbar && bottomToolbar.contains(e.target)) {
           return;
         }
@@ -219,16 +230,14 @@
       }, true);
     }
 
-    // 唤起指定节点编辑
     show(node) {
       if (!node) return;
       if (this.isEditing) {
         this.commitAndHide();
       }
 
-      // 复位之前节点状态
       if (this.currentNode && this.currentNode.group) {
-        this.currentNode.group.removeClass('is-feishu-editing');
+        this.currentNode.group.removeClass('is-mm-editing');
         if (this.currentNode.hoverNode) this.currentNode.hoverNode.show();
       }
 
@@ -236,9 +245,8 @@
       this.isEditing = true;
       this.hideBubbleMenu();
 
-      // 隐藏底层 SVG 激活框与节点内容，杜绝双重方框重叠
       if (node.group) {
-        node.group.addClass('is-feishu-editing');
+        node.group.addClass('is-mm-editing');
       }
       if (node.hoverNode) {
         node.hoverNode.hide();
@@ -255,13 +263,11 @@
       this.autoResize();
       this.updatePreview();
 
-      // 聚焦并将光标定位至文本末尾，避免误覆盖全部文字
       this.textarea.focus();
       this.textarea.selectionStart = text.length;
       this.textarea.selectionEnd = text.length;
     }
 
-    // 检测是否有文本被选中
     hasSelection() {
       if (!this.isEditing || !this.textarea) return false;
       const start = this.textarea.selectionStart;
@@ -269,7 +275,6 @@
       return (start !== undefined && end !== undefined && start !== end);
     }
 
-    // 检测选区状态并控制气泡菜单展现
     checkSelection() {
       if (!this.isEditing) {
         this.hideBubbleMenu();
@@ -282,17 +287,14 @@
       }
     }
 
-    // 显示选区悬浮气泡菜单并智能定位
     showBubbleMenu() {
       if (!this.isEditing || !this.currentNode) return;
       const wrapRect = this.inputWrap.getBoundingClientRect();
       let left = wrapRect.left + wrapRect.width / 2;
       let top = wrapRect.top - 8;
 
-      // 屏幕边界防溢出微调
       left = Math.max(160, Math.min(window.innerWidth - 160, left));
       if (top - 45 < 0) {
-        // 若上方空间不足，翻转至输入框下方
         const capsuleRect = this.capsule.getBoundingClientRect();
         top = (this.capsule.style.display !== 'none' ? capsuleRect.bottom : wrapRect.bottom) + 38;
       }
@@ -302,7 +304,6 @@
       this.bubbleMenu.style.display = 'flex';
     }
 
-    // 隐藏气泡菜单
     hideBubbleMenu() {
       if (this.bubbleMenu) {
         this.bubbleMenu.style.display = 'none';
@@ -312,7 +313,6 @@
       }
     }
 
-    // 选区富文本排版算法 (Smart Wrap / Unwrap Engine)
     formatSelection(type, extra, optStart, optEnd) {
       if (!this.isEditing || !this.textarea) return;
       const start = (typeof optStart === 'number') ? optStart : this.textarea.selectionStart;
@@ -320,7 +320,6 @@
       const val = this.textarea.value;
 
       if (start === end) {
-        // 未选中文本：快速插入语法骨架并将光标置于中间
         let insert = '';
         let cursorOffset = 0;
         if (type === 'bold') { insert = '****'; cursorOffset = 2; }
@@ -330,8 +329,8 @@
         else if (type === 'code') { insert = '``'; cursorOffset = 1; }
         else if (type === 'math') { insert = '$$'; cursorOffset = 1; }
         else if (type === 'color' && extra && extra !== 'none') {
-          insert = `<mark class="feishu-inline-hl-${extra}"></mark>`;
-          cursorOffset = 31 + extra.length;
+          insert = `<mark class="mm-inline-hl-${extra}"></mark>`;
+          cursorOffset = 27 + extra.length;
         }
 
         if (insert) {
@@ -350,21 +349,16 @@
       let newEnd = end;
 
       if (type === 'bold') {
-        // 1. 选区本身以 ** 开头和结尾 (unwrap)
         if (sel.startsWith('**') && sel.endsWith('**') && sel.length >= 4) {
           const unwrapped = sel.slice(2, -2);
           newVal = val.substring(0, start) + unwrapped + val.substring(end);
           newStart = start;
           newEnd = start + unwrapped.length;
-        }
-        // 2. 选区两端紧邻 ** (unwrap)
-        else if (start >= 2 && val.substring(start - 2, start) === '**' && val.substring(end, end + 2) === '**') {
+        } else if (start >= 2 && val.substring(start - 2, start) === '**' && val.substring(end, end + 2) === '**') {
           newVal = val.substring(0, start - 2) + sel + val.substring(end + 2);
           newStart = start - 2;
           newEnd = newStart + sel.length;
-        }
-        // 3. 执行加粗包裹 (wrap)
-        else {
+        } else {
           const wrapped = `**${sel}**`;
           newVal = val.substring(0, start) + wrapped + val.substring(end);
           newStart = start + 2;
@@ -465,7 +459,6 @@
       this.showBubbleMenu();
     }
 
-    // 选区高亮智能处理引擎：支持 LaTeX 原子化外扩防污染、选区智能解包、三段式切分与可逆清除
     applyHighlightToRange(val, start, end, colorKey) {
       if (!val) val = '';
       let normColor = colorKey;
@@ -473,14 +466,13 @@
 
       if (start === end) {
         if (!normColor || normColor === 'none') return { val, start, end };
-        const tagStart = `<mark class="feishu-inline-hl-${normColor}">`;
+        const tagStart = `<mark class="mm-inline-hl-${normColor}">`;
         const tagEnd = `</mark>`;
         const newVal = val.substring(0, start) + tagStart + tagEnd + val.substring(end);
         const newPos = start + tagStart.length;
         return { val: newVal, start: newPos, end: newPos };
       }
 
-      // 1. LaTeX 公式定界符原子化防污染边界检测与外扩
       const mathRegex = /\$\$[\s\S]+?\$\$|\$[^\$\n]+?\$/g;
       let mathMatch;
       while ((mathMatch = mathRegex.exec(val)) !== null) {
@@ -492,8 +484,7 @@
         }
       }
 
-      // 2. 检查选区两端是否落在已有的高亮标签内部
-      const markTagRegex = /<(?:mark|span)\s+class="feishu-(?:inline|text)-hl-([a-z]+)">([\s\S]*?)<\/(?:mark|span)>/gi;
+      const markTagRegex = /<(?:mark|span)\s+class="mm-(?:inline|text)-hl-([a-z]+)">([\s\S]*?)<\/(?:mark|span)>/gi;
       let tagMatch;
       let matchedTagEnclosing = null;
 
@@ -522,7 +513,6 @@
         }
       }
 
-      // 3. 处理选区位于某高亮标签内部的情况 (可逆清除 / 拆分 / 换色)
       if (matchedTagEnclosing) {
         const { tStart, tEnd, contentStart, contentEnd, tagColor, innerText } = matchedTagEnclosing;
         if ((start <= contentStart && end >= contentEnd) || (start === tStart && end === tEnd)) {
@@ -530,7 +520,7 @@
             const newVal = val.substring(0, tStart) + innerText + val.substring(tEnd);
             return { val: newVal, start: tStart, end: tStart + innerText.length };
           } else {
-            const newWrapped = `<mark class="feishu-inline-hl-${normColor}">${innerText}</mark>`;
+            const newWrapped = `<mark class="mm-inline-hl-${normColor}">${innerText}</mark>`;
             const newVal = val.substring(0, tStart) + newWrapped + val.substring(tEnd);
             return { val: newVal, start: tStart, end: tStart + newWrapped.length };
           }
@@ -544,27 +534,26 @@
 
         let middleFormatted = partSelected;
         if (normColor && normColor !== 'none' && normColor !== tagColor) {
-          middleFormatted = `<mark class="feishu-inline-hl-${normColor}">${partSelected}</mark>`;
+          middleFormatted = `<mark class="mm-inline-hl-${normColor}">${partSelected}</mark>`;
         }
 
         let replacement = '';
         if (partBefore) {
-          replacement += `<mark class="feishu-inline-hl-${tagColor}">${partBefore}</mark>`;
+          replacement += `<mark class="mm-inline-hl-${tagColor}">${partBefore}</mark>`;
         }
         replacement += middleFormatted;
         if (partAfter) {
-          replacement += `<mark class="feishu-inline-hl-${tagColor}">${partAfter}</mark>`;
+          replacement += `<mark class="mm-inline-hl-${tagColor}">${partAfter}</mark>`;
         }
 
         const newVal = val.substring(0, tStart) + replacement + val.substring(tEnd);
-        const newStart = tStart + (partBefore ? `<mark class="feishu-inline-hl-${tagColor}">${partBefore}</mark>`.length : 0);
+        const newStart = tStart + (partBefore ? `<mark class="mm-inline-hl-${tagColor}">${partBefore}</mark>`.length : 0);
         const newEnd = newStart + middleFormatted.length;
         return { val: newVal, start: newStart, end: newEnd };
       }
 
-      // 4. 常规选区
       const sel = val.substring(start, end);
-      const cleanInner = sel.replace(/<(?:mark|span)\s+class="feishu-(?:inline|text)-hl-[a-z]+">/gi, '')
+      const cleanInner = sel.replace(/<(?:mark|span)\s+class="mm-(?:inline|text)-hl-[a-z]+">/gi, '')
                             .replace(/<\/(?:mark|span)>/gi, '');
 
       if (!normColor || normColor === 'none') {
@@ -572,12 +561,11 @@
         return { val: newVal, start, end: start + cleanInner.length };
       }
 
-      const wrapped = `<mark class="feishu-inline-hl-${normColor}">${cleanInner}</mark>`;
+      const wrapped = `<mark class="mm-inline-hl-${normColor}">${cleanInner}</mark>`;
       const newVal = val.substring(0, start) + wrapped + val.substring(end);
       return { val: newVal, start, end: start + wrapped.length };
     }
 
-    // 根据节点屏幕几何包围盒计算输入框与预览胶囊绝对坐标
     updatePosition() {
       if (!this.currentNode) return;
       const foreignObj = this.currentNode.group && this.currentNode.group.findOne('foreignObject');
@@ -600,16 +588,14 @@
         };
       }
 
-      // 输入框定位
       const minW = Math.max(rect.width, 160);
-      const minH = Math.max(rect.height, 32);
+      const minH = Math.max(rect.height, 30);
 
       this.inputWrap.style.left = `${Math.round(rect.left)}px`;
       this.inputWrap.style.top = `${Math.round(rect.top)}px`;
       this.inputWrap.style.minWidth = `${Math.round(minW)}px`;
       this.inputWrap.style.minHeight = `${Math.round(minH)}px`;
 
-      // 实时预览胶囊定位：依附在输入框正下方（间距 8px），若触底则反转至上方
       const capsuleGap = 8;
       let capsuleTop = rect.bottom + capsuleGap;
       const estimatedCapsuleHeight = 50;
@@ -621,12 +607,11 @@
       this.capsule.style.top = `${Math.round(capsuleTop)}px`;
     }
 
-    // 自动自适应文本输入框宽高
     autoResize() {
       if (!this.textarea) return;
       this.textarea.style.height = 'auto';
       const scrollHeight = this.textarea.scrollHeight;
-      this.textarea.style.height = `${Math.max(scrollHeight, 28)}px`;
+      this.textarea.style.height = `${Math.max(scrollHeight, 26)}px`;
 
       const wrapRect = this.inputWrap.getBoundingClientRect();
       const capsuleGap = 8;
@@ -637,7 +622,6 @@
       this.capsule.style.top = `${Math.round(capsuleTop)}px`;
     }
 
-    // 实时更新 KaTeX 与 Markdown 渲染胶囊
     updatePreview() {
       if (!this.capsuleContent) return;
       const text = this.textarea.value;
@@ -663,7 +647,6 @@
       this.capsule.style.display = 'block';
     }
 
-    // 提交编辑并隐藏
     commitAndHide() {
       if (!this.isEditing || !this.currentNode) return;
       const newText = this.textarea.value.trim();
@@ -671,9 +654,8 @@
 
       this.hideBubbleMenu();
 
-      // 恢复节点状态
       if (node.group) {
-        node.group.removeClass('is-feishu-editing');
+        node.group.removeClass('is-mm-editing');
       }
       if (node.hoverNode) {
         node.hoverNode.show();
@@ -684,16 +666,14 @@
       this.isEditing = false;
       this.currentNode = null;
 
-      // 调用 SimpleMindMap 原生指令更新文本并触发布局重算
       this.mindMap.execCommand('SET_NODE_TEXT', node, newText);
     }
 
-    // 取消编辑并隐藏
     cancelAndHide() {
       this.hideBubbleMenu();
       if (this.currentNode) {
         if (this.currentNode.group) {
-          this.currentNode.group.removeClass('is-feishu-editing');
+          this.currentNode.group.removeClass('is-mm-editing');
         }
         if (this.currentNode.hoverNode) {
           this.currentNode.hoverNode.show();
@@ -706,5 +686,5 @@
     }
   }
 
-  global.FeishuNodeEditor = FeishuNodeEditor;
+  global.MindMapNodeEditor = MindMapNodeEditor;
 })(typeof window !== 'undefined' ? window : this);

@@ -1,5 +1,5 @@
 /**
- * 飞书思维笔记大纲引擎 (FeishuOutliner)
+ * 思维笔记大纲引擎 (MindMapOutliner)
  * 特性：
  * 1. 递归渲染树状大纲纸张列表 (• 圆点手柄 + 极细竖向导向线)
  * 2. 全键盘快捷工作流:
@@ -9,7 +9,7 @@
  *    - Backspace: 空节点回退与删除
  *    - Up / Down: 行间垂直跳转
  * 3. 圆点手柄支持拖拽重排与父子层级变更 (HTML5 Drag and Drop)
- * 4. 纯原生 Vanilla JS 实现，零外部重型框架依赖，零表情符号
+ * 4. 支持作为独立组件挂载于任意宿主容器，并提供键盘作用域隔离
  */
 (function (global) {
   'use strict';
@@ -27,18 +27,21 @@
     return s;
   }
 
-  class FeishuOutliner {
+  class MindMapOutliner {
     constructor(container, options = {}) {
       if (!container) {
-        throw new Error('[FeishuOutliner] 未指定挂载容器');
+        throw new Error('[MindMapOutliner] 未指定挂载容器');
       }
 
       this.container = container;
       this.options = Object.assign({
         placeholder: '输入内容...',
-        titlePlaceholder: '输入导图根节点标题...'
+        titlePlaceholder: '输入导图根节点标题...',
+        mountContainer: null,
+        isActiveCheck: null
       }, options);
 
+      this.mountContainer = this.options.mountContainer || this.container.parentElement || document.body;
       this.data = null;
       this.listeners = {};
       this.draggedUid = null;
@@ -47,6 +50,13 @@
 
       this.initDom();
       this.bindEvents();
+    }
+
+    isActive() {
+      if (typeof this.options.isActiveCheck === 'function') {
+        return !!this.options.isActiveCheck();
+      }
+      return true;
     }
 
     // 初始化外部骨架
@@ -69,11 +79,11 @@
       this.previewCapsuleContent = document.createElement('div');
       this.previewCapsuleContent.className = 'capsule-content';
       this.previewCapsule.appendChild(this.previewCapsuleContent);
-      document.body.appendChild(this.previewCapsule);
+      this.mountContainer.appendChild(this.previewCapsule);
 
       // 选区悬浮气泡菜单 (Bubble Menu)
       this.bubbleMenu = document.createElement('div');
-      this.bubbleMenu.className = 'feishu-bubble-menu';
+      this.bubbleMenu.className = 'mm-bubble-menu';
       this.bubbleMenu.innerHTML = `
         <button type="button" class="bubble-btn" data-action="bold" title="加粗 (Ctrl+B)">
           <strong style="font-size: 13px;">B</strong>
@@ -98,7 +108,7 @@
         <button type="button" class="bubble-btn" data-action="color-trigger" title="局部文字高亮">
           <span style="font-weight: bold; border-bottom: 2px solid #3370ff; padding-bottom: 1px; font-size: 12px;">A</span>
         </button>
-        <div class="feishu-bubble-popover">
+        <div class="mm-bubble-popover">
           <button type="button" class="color-dot color-swatch-btn" data-color="red" title="红色 (Alt+R)" style="background-color: #ffc5c0;">A</button>
           <button type="button" class="color-dot color-swatch-btn" data-color="yellow" title="黄色 (Alt+Y)" style="background-color: #ffe699;">A</button>
           <button type="button" class="color-dot color-swatch-btn" data-color="purple" title="紫色 (Alt+P)" style="background-color: #f6d5f8;">A</button>
@@ -109,8 +119,8 @@
           <button type="button" class="color-dot color-swatch-btn is-clear" data-color="none" title="清除高亮">&empty;</button>
         </div>
       `;
-      this.bubblePopover = this.bubbleMenu.querySelector('.feishu-bubble-popover');
-      document.body.appendChild(this.bubbleMenu);
+      this.bubblePopover = this.bubbleMenu.querySelector('.mm-bubble-popover');
+      this.mountContainer.appendChild(this.bubbleMenu);
     }
 
     // 载入思维导图标准树数据并渲染
@@ -165,6 +175,8 @@
     renderNode(nodeData, level = 1) {
       const uid = nodeData.data.uid;
       const text = stripOuterParagraph(nodeData.data.text || '');
+      const tag = nodeData.data.tag || '';
+      const tagType = nodeData.data.tagType || '';
       const hasChildren = Array.isArray(nodeData.children) && nodeData.children.length > 0;
       const isCollapsed = this.collapsedMap.has(uid);
       const isCurrentlyFocused = (this.focusedUid === uid);
@@ -175,7 +187,7 @@
 
       let rowClasses = `outliner-row ${isCurrentlyFocused ? 'is-editing' : ''}`;
       if (nodeData.data && nodeData.data.highlightColor) {
-        rowClasses += ` feishu-highlight-${nodeData.data.highlightColor}`;
+        rowClasses += ` mm-highlight-${nodeData.data.highlightColor}`;
       }
 
       const rowEl = document.createElement('div');
@@ -186,7 +198,7 @@
       if (hasChildren) {
         const foldBtn = document.createElement('span');
         foldBtn.className = `outliner-fold-btn ${isCollapsed ? 'folded' : ''}`;
-        foldBtn.innerHTML = '&#9660;'; // 纯字符下三角
+        foldBtn.innerHTML = '&#9660;';
         foldBtn.title = isCollapsed ? '展开子项' : '折叠子项';
         foldBtn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -218,7 +230,7 @@
       textWrap.className = 'outliner-text-wrap';
       textWrap.dataset.uid = uid;
 
-      // 1. 渲染呈现视图 (浏览态：KaTeX 数学公式与 Markdown 完美排版)
+      // 1. 渲染呈现视图 (浏览态：KaTeX 数学公式与 Markdown 完美排版 + 语义前缀标签)
       let renderedHtml = '';
       if (global.MarkdownLatexEngine && typeof global.MarkdownLatexEngine.renderInline === 'function') {
         renderedHtml = global.MarkdownLatexEngine.renderInline(text);
@@ -226,10 +238,17 @@
         renderedHtml = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       }
 
+      let tagPrefixHtml = '';
+      if (tag) {
+        const safeTag = String(tag).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const safeType = String(tagType || '').replace(/[^a-z0-9_-]/gi, '');
+        tagPrefixHtml = `<span class="mm-node-tag outliner-node-tag" ${safeType ? `data-tag-type="${safeType}"` : ''}>${safeTag}</span>`;
+      }
+
       const displayView = document.createElement('div');
       displayView.className = 'outliner-display-view';
       displayView.dataset.uid = uid;
-      displayView.innerHTML = renderedHtml || '&nbsp;';
+      displayView.innerHTML = tagPrefixHtml + (renderedHtml || '&nbsp;');
       displayView.style.display = isCurrentlyFocused ? 'none' : 'inline-flex';
 
       // 单击浏览层平滑切入编辑态
@@ -429,7 +448,7 @@
         else if (type === 'strikethrough') insert = '~~~~';
         else if (type === 'code') insert = '``';
         else if (type === 'math') insert = '$$';
-        else if (type === 'color' && extra && extra !== 'none') insert = `<mark class="feishu-inline-hl-${extra}"></mark>`;
+        else if (type === 'color' && extra && extra !== 'none') insert = `<mark class="mm-inline-hl-${extra}"></mark>`;
 
         if (insert) {
           const textNode = document.createTextNode(insert);
@@ -483,7 +502,7 @@
         }
       } else if (type === 'color') {
         const colorKey = extra;
-        const markRegex = /^<mark class="feishu-inline-hl-([a-z]+)">([\s\S]+?)<\/mark>$/;
+        const markRegex = /^<mark class="mm-inline-hl-([a-z]+)">([\s\S]+?)<\/mark>$/;
         const match = selectedText.match(markRegex);
         if (match) {
           const curColor = match[1];
@@ -491,15 +510,13 @@
           if (colorKey === 'none' || colorKey === curColor) {
             formatted = inner;
           } else {
-            formatted = `<mark class="feishu-inline-hl-${colorKey}">${inner}</mark>`;
+            formatted = `<mark class="mm-inline-hl-${colorKey}">${inner}</mark>`;
           }
         } else if (colorKey === 'none') {
-          // 清除选区内部残留的高亮标签
-          formatted = selectedText.replace(/<(?:mark|span)\s+class="feishu-(?:inline|text)-hl-[a-z]+">([\s\S]*?)<\/(?:mark|span)>/gi, '$1');
+          formatted = selectedText.replace(/<(?:mark|span)\s+class="mm-(?:inline|text)-hl-[a-z]+">([\s\S]*?)<\/(?:mark|span)>/gi, '$1');
         } else {
-          // 清洗嵌套后包裹
-          const clean = selectedText.replace(/<(?:mark|span)\s+class="feishu-(?:inline|text)-hl-[a-z]+">/gi, '').replace(/<\/(?:mark|span)>/gi, '');
-          formatted = `<mark class="feishu-inline-hl-${colorKey}">${clean}</mark>`;
+          const clean = selectedText.replace(/<(?:mark|span)\s+class="mm-(?:inline|text)-hl-[a-z]+">/gi, '').replace(/<\/(?:mark|span)>/gi, '');
+          formatted = `<mark class="mm-inline-hl-${colorKey}">${clean}</mark>`;
         }
       }
 
@@ -525,8 +542,17 @@
         const row = input.closest('.outliner-row');
         if (row) {
           const disp = row.querySelector('.outliner-display-view');
-          if (disp && global.MarkdownLatexEngine) {
-            disp.innerHTML = global.MarkdownLatexEngine.renderInline(text) || '&nbsp;';
+          if (disp) {
+            let tagPrefixHtml = '';
+            if (found.data.tag) {
+              const safeTag = String(found.data.tag).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+              const safeType = String(found.data.tagType || '').replace(/[^a-z0-9_-]/gi, '');
+              tagPrefixHtml = `<span class="mm-node-tag outliner-node-tag" ${safeType ? `data-tag-type="${safeType}"` : ''}>${safeTag}</span>`;
+            }
+            const rendered = (global.MarkdownLatexEngine && typeof global.MarkdownLatexEngine.renderInline === 'function')
+              ? global.MarkdownLatexEngine.renderInline(text)
+              : text;
+            disp.innerHTML = tagPrefixHtml + (rendered || '&nbsp;');
           }
         }
         this.updatePreviewCapsule(this.focusedUid);
@@ -554,10 +580,16 @@
             this.emitChange();
           }
           if (disp) {
+            let tagPrefixHtml = '';
+            if (found && found.data && found.data.tag) {
+              const safeTag = String(found.data.tag).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+              const safeType = String(found.data.tagType || '').replace(/[^a-z0-9_-]/gi, '');
+              tagPrefixHtml = `<span class="mm-node-tag outliner-node-tag" ${safeType ? `data-tag-type="${safeType}"` : ''}>${safeTag}</span>`;
+            }
             if (global.MarkdownLatexEngine && typeof global.MarkdownLatexEngine.renderInline === 'function') {
-              disp.innerHTML = global.MarkdownLatexEngine.renderInline(newText) || '&nbsp;';
+              disp.innerHTML = tagPrefixHtml + (global.MarkdownLatexEngine.renderInline(newText) || '&nbsp;');
             } else {
-              disp.textContent = newText || '';
+              disp.innerHTML = tagPrefixHtml + (newText || '&nbsp;');
             }
             disp.style.display = 'inline-flex';
           }
@@ -577,12 +609,12 @@
     bindEvents() {
       // 0. 点击外部非编辑区域时提交当前正在编辑的节点
       document.addEventListener('mousedown', (e) => {
-        if (!this.focusedUid) return;
+        if (!this.isActive() || !this.focusedUid) return;
         const row = this.container.querySelector(`.outliner-row[data-uid="${this.focusedUid}"]`);
         if (row && (row.contains(e.target) || this.bubbleMenu.contains(e.target))) {
           return;
         }
-        const bottomToolbar = document.querySelector('.feishu-bottom-toolbar');
+        const bottomToolbar = document.querySelector('.mm-bottom-toolbar');
         if (bottomToolbar && bottomToolbar.contains(e.target)) {
           return;
         }
@@ -615,7 +647,7 @@
 
       // 选区变化检测
       document.addEventListener('selectionchange', () => {
-        if (this.focusedUid) {
+        if (this.isActive() && this.focusedUid) {
           this.checkSelection();
         }
       });
@@ -650,20 +682,7 @@
       this.treeEl.addEventListener('input', (e) => {
         const target = e.target;
         if (!target.classList.contains('outliner-text')) return;
-        const uid = target.dataset.uid;
-        const found = this.findNode(uid);
-        if (found) {
-          found.data.text = target.textContent.trim();
-          const row = target.closest('.outliner-row');
-          if (row) {
-            const disp = row.querySelector('.outliner-display-view');
-            if (disp && global.MarkdownLatexEngine) {
-              disp.innerHTML = global.MarkdownLatexEngine.renderInline(found.data.text) || '&nbsp;';
-            }
-          }
-          this.updatePreviewCapsule(uid);
-          this.emitChange();
-        }
+        this.syncNodeTextFromInput(target);
       });
 
       // 3. 全键盘协议 (Enter, Tab, Shift+Tab, Backspace, Arrows)
@@ -769,7 +788,6 @@
         const row = e.target.closest('.outliner-row');
         if (!row || row.dataset.uid === this.draggedUid) return;
 
-        // 根据鼠标相对于行的高度判断放置位置 (上半部: 放在上方; 下半部: 放在下方)
         const rect = row.getBoundingClientRect();
         const offsetY = e.clientY - rect.top;
         this.clearDragHoverClasses();
@@ -936,6 +954,24 @@
       this.render();
     }
 
+    // 按指定深度展开大纲节点
+    expandToLevel(maxDepth = 2) {
+      this.collapsedMap.clear();
+      const walk = (node, depth) => {
+        if (!node) return;
+        if (depth >= maxDepth && node.data && node.data.uid && Array.isArray(node.children) && node.children.length > 0) {
+          this.collapsedMap.add(node.data.uid);
+        }
+        if (Array.isArray(node.children)) {
+          node.children.forEach(child => walk(child, depth + 1));
+        }
+      };
+      if (this.data && Array.isArray(this.data.children)) {
+        this.data.children.forEach(child => walk(child, 1));
+      }
+      this.render();
+    }
+
     // 全部折叠大纲节点 (折叠所有有一级子级及以上的行)
     collapseAll() {
       this.collapsedMap.clear();
@@ -956,5 +992,5 @@
     }
   }
 
-  global.FeishuOutliner = FeishuOutliner;
+  global.MindMapOutliner = MindMapOutliner;
 })(typeof window !== 'undefined' ? window : this);

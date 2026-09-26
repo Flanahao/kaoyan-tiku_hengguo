@@ -1,13 +1,13 @@
 /**
- * 飞书思维笔记全局快捷键管理器 (FeishuShortcutManager)
+ * 思维导图全局快捷键管理器 (MindMapShortcutManager)
  * 职责：
  * 1. 7 色高亮体系 (Alt + R, Y, P, B, C, O, G)
  * 2. 节点样式切换 (Ctrl + B 加粗, Ctrl + I 斜体, Ctrl + U 下划线)
  * 3. 节点副本创建 (Ctrl + D Duplicate)
- * 4. 节点折叠与展开 (Alt + . / Alt + Shift + .)
+ * 4. 节点折叠与展开 (Alt + . / Alt + Shift + . / Alt + 1, 2, 3 按层级展开)
  * 5. 单节点钻取聚焦与返回 (Ctrl + ] / Ctrl + [)
- * 6. 画布缩放 (Ctrl + + / -) 与快捷键指南抽屉唤起 (Ctrl + /)
- * 7. 纯原生 Vanilla JS，严格零表情符号
+ * 6. 画布缩放 (Ctrl + + / -) 与快捷键指南抽屉唤起 (H / Ctrl + /)
+ * 7. 支持作用域隔离 (isActiveCheck)，当导图未激活时零侵入宿主环境
  */
 (function (global) {
   'use strict';
@@ -46,13 +46,15 @@
     return res;
   }
 
-  class FeishuShortcutManager {
+  class MindMapShortcutManager {
     constructor(mindMap, options = {}) {
       if (!mindMap) {
-        throw new Error('[FeishuShortcutManager] 必须传入 SimpleMindMap 实例');
+        throw new Error('[MindMapShortcutManager] 必须传入 SimpleMindMap 实例');
       }
       this.mindMap = mindMap;
       this.options = options;
+      this.mountContainer = options.container || document.body;
+      this.isActiveCheck = typeof options.isActiveCheck === 'function' ? options.isActiveCheck : null;
       this.shortcutDrawer = options.shortcutDrawer || null;
 
       // 钻取栈 (Drill-down stack)
@@ -63,12 +65,19 @@
       this.bindShortcuts();
     }
 
+    isActive() {
+      if (this.isActiveCheck) {
+        return !!this.isActiveCheck();
+      }
+      return true;
+    }
+
     initBreadcrumbDom() {
-      const existing = document.querySelector('.feishu-drill-breadcrumb');
+      const existing = this.mountContainer.querySelector('.mm-drill-breadcrumb');
       if (existing) existing.remove();
 
       this.breadcrumbEl = document.createElement('div');
-      this.breadcrumbEl.className = 'feishu-drill-breadcrumb';
+      this.breadcrumbEl.className = 'mm-drill-breadcrumb';
       this.breadcrumbEl.style.cssText = `
         position: fixed;
         top: 16px;
@@ -86,17 +95,19 @@
         font-size: 13px;
         color: #646a73;
       `;
-      document.body.appendChild(this.breadcrumbEl);
+      this.mountContainer.appendChild(this.breadcrumbEl);
     }
 
     bindShortcuts() {
       window.addEventListener('keydown', (e) => {
+        if (!this.isActive()) return;
+
         const isEditing = this.isUserTyping();
         const activeList = (this.mindMap.renderer && this.mindMap.renderer.activeNodeList) || [];
         const activeNode = (activeList.length === 1) ? activeList[0] : null;
 
         // 1. 快捷键指南面板呼出 (H 键与 Ctrl + /)
-        if ((e.key === 'h' || e.key === 'H') && !isEditing && !e.altKey) {
+        if ((e.key === 'h' || e.key === 'H') && !isEditing && !e.altKey && !e.ctrlKey && !e.metaKey) {
           e.preventDefault();
           e.stopPropagation();
           if (this.shortcutDrawer) {
@@ -113,7 +124,6 @@
           }
           return;
         }
-
 
         // 2. 7 色高亮体系 (Alt + R, Y, P, B, C, O, G 以及 Alt + H 快捷高亮)
         if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
@@ -141,6 +151,69 @@
               return;
             }
           }
+        }
+
+        // 2.1 单键层级概览与全量分类展开 (1, 2, 3, 0, Q, W, E, L) - 非编辑/打字态下直接生效
+        if (!isEditing && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+          if (e.key === '1' || e.key === '2' || e.key === '3' || e.key === '0') {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.key === '0') {
+              this.expandAll();
+            } else if (e.key === '1') {
+              this.expandToLevel(1); // 1 键：知识点展开至 1.1~3.3，考点展开至 5 大考点，招法展开至 7 大招法
+            } else if (e.key === '2') {
+              this.expandToLevel(2); // 2 键：微观要点与真题步骤展开
+            } else if (e.key === '3') {
+              this.expandToLevel(3); // 3 键：全量深度展开
+            }
+            return;
+          }
+
+          const k = (e.key || '').toLowerCase();
+          if (k === 'q') {
+            e.preventDefault();
+            e.stopPropagation();
+            this.expandCategory('knowledge');
+            return;
+          }
+          if (k === 'w') {
+            e.preventDefault();
+            e.stopPropagation();
+            this.expandCategory('exam');
+            return;
+          }
+          if (k === 'e') {
+            e.preventDefault();
+            e.stopPropagation();
+            this.expandCategory('method');
+            return;
+          }
+          if (k === 'l') {
+            e.preventDefault();
+            e.stopPropagation();
+            if (window.CognitiveViewController && typeof window.CognitiveViewController.toggleAssociativeLines === 'function') {
+              window.CognitiveViewController.toggleAssociativeLines();
+            }
+            return;
+          }
+        }
+
+        // 兼容 Alt + 1 / 2 / 3 / 0 / Q / W / E
+        if (!isEditing && e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+          if (e.key === '1' || e.key === '2' || e.key === '3' || e.key === '0') {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.key === '0') this.expandAll();
+            else if (e.key === '1') this.expandToLevel(1);
+            else if (e.key === '2') this.expandToLevel(2);
+            else if (e.key === '3') this.expandToLevel(3);
+            return;
+          }
+          const k = (e.key || '').toLowerCase();
+          if (k === 'q') { e.preventDefault(); e.stopPropagation(); this.expandCategory('knowledge'); return; }
+          if (k === 'w') { e.preventDefault(); e.stopPropagation(); this.expandCategory('exam'); return; }
+          if (k === 'e') { e.preventDefault(); e.stopPropagation(); this.expandCategory('method'); return; }
         }
 
         // 3. 复制节点副本 (Ctrl + D)
@@ -176,12 +249,10 @@
           e.preventDefault();
           e.stopPropagation();
           if (e.shiftKey) {
-            // 全部展开/折叠
             this.toggleExpandAll();
           } else if (activeNode) {
-            // 单节点展开/折叠
             const expand = activeNode.getData('expand');
-            this.mindMap.execCommand('SET_NODE_EXPAND', activeNode, !expand);
+            this.mindMap.execCommand('SET_NODE_EXPAND', activeNode, expand === false);
           }
           return;
         }
@@ -229,12 +300,12 @@
 
     // 转发富文本排版指令（优先作用于活跃编辑器的文本选区）
     dispatchFormatting(formatType, extra = null) {
-      const editor = this.mindMap.feishuNodeEditor || window._feishuNodeEditorInstance;
+      const editor = this.mindMap.mindMapNodeEditor || window._mindMapNodeEditorInstance;
       if (editor && editor.isEditing) {
         editor.formatSelection(formatType, extra);
         return true;
       }
-      const outliner = window._outlinerInstance;
+      const outliner = this.options.outliner || window._outlinerInstance;
       if (outliner && outliner.focusedUid) {
         outliner.formatSelection(formatType, extra);
         return true;
@@ -261,7 +332,7 @@
       let text = nodeData.text || '';
 
       if (!targetColor && text) {
-        text = text.replace(/<span class="feishu-(?:text|inline)-hl-[a-z]+">([\s\S]+?)<\/span>/gi, '$1')
+        text = text.replace(/<span class="mm-(?:text|inline)-hl-[a-z]+">([\s\S]+?)<\/span>/gi, '$1')
                    .replace(/<mark class="[^"]*">([\s\S]+?)<\/mark>/gi, '$1');
       }
 
@@ -309,7 +380,6 @@
       if (index !== -1) {
         parent.nodeData.children.splice(index + 1, 0, cloned);
         this.mindMap.render(() => {
-          // 自动激活新创建的副本节点
           const newNode = this.mindMap.renderer.findNodeByUid(cloned.data.uid);
           if (newNode) {
             this.mindMap.renderer.clearActiveNodeList();
@@ -332,6 +402,10 @@
       });
 
       const subtree = safeCloneNodeData(node.nodeData);
+      // 钻取进入子树后默认展开该根节点
+      if (subtree && subtree.data) {
+        subtree.data.expand = true;
+      }
       this.mindMap.setData(subtree);
       this.mindMap.view.reset();
 
@@ -346,7 +420,6 @@
       this.mindMap.view.reset();
 
       this.updateBreadcrumb();
-      // 重新高亮刚才聚焦的节点
       setTimeout(() => {
         const targetNode = this.mindMap.renderer.findNodeByUid(prev.targetUid);
         if (targetNode) {
@@ -367,7 +440,7 @@
 
       this.breadcrumbEl.style.display = 'inline-flex';
       const items = ['<span style="cursor: pointer; color: #3370ff;" class="breadcrumb-root">全部导图</span>'];
-      this.drillStack.forEach((entry, idx) => {
+      this.drillStack.forEach((entry) => {
         items.push('<span>/</span>');
         items.push(`<span style="font-weight: 500; color: #1f2329;">${entry.title}</span>`);
       });
@@ -381,6 +454,132 @@
           }
           this.drillUp();
         };
+      }
+    }
+
+    // 按指定层级展开导图 (实现“一览全局”与三柱同频展开能力)
+    expandToLevel(level = 1) {
+      if (level >= 3) {
+        this.expandAll();
+        return;
+      }
+      const treeData = this.mindMap.getData(false);
+      if (treeData) {
+        const walk = (node, depth, branchType) => {
+          if (!node) return;
+          if (!node.data) node.data = {};
+          const uid = node.data.uid || '';
+
+          let curBranch = branchType;
+          if (uid === 'branch_knowledge' || uid.startsWith('sec_')) curBranch = 'knowledge';
+          else if (uid === 'branch_exam_points' || uid.startsWith('kp_')) curBranch = 'exam';
+          else if (uid === 'branch_methods' || uid.startsWith('m_')) curBranch = 'method';
+
+          if (depth === 0 || depth === 1) {
+            node.data.expand = true;
+          } else if (curBranch === 'knowledge') {
+            // 知识点体系：含有 §1/§2/§3 章节中间层 (depth 2)
+            // level 1: 展开至 1.1~3.3 知识点卡片，1.1~3.3 内部公式定理折叠
+            // level 2: 展开 1.1~3.3 内部公式定理卡片
+            if (depth === 2) {
+              node.data.expand = true; // §1, §2, §3 展开
+            } else if (depth === 3) {
+              node.data.expand = (level >= 2); // 1.1~3.3 在 level 1 下折叠子项，在 level 2 下展开
+            } else {
+              node.data.expand = (level >= 3);
+            }
+          } else {
+            // 考点与解法体系：无章节中间层，depth 2 即为具体考点与招法
+            // level 1: 具体考点/招法展示，折叠其下属题源真题与解题步骤
+            // level 2: 展开具体考点下属的真题题源与招法下属的步骤避坑
+            if (depth === 2) {
+              node.data.expand = (level >= 2);
+            } else {
+              node.data.expand = (level >= 3);
+            }
+          }
+
+          if (Array.isArray(node.children)) {
+            node.children.forEach(c => walk(c, depth + 1, curBranch));
+          }
+        };
+
+        walk(treeData, 0, null);
+        this.mindMap.setData(treeData);
+        this.mindMap.render();
+      }
+
+      const outliner = this.options.outliner || window._outlinerInstance;
+      if (outliner && typeof outliner.expandToLevel === 'function') {
+        outliner.expandToLevel(level);
+      }
+      if (typeof this.options.onLevelChange === 'function') {
+        this.options.onLevelChange(level);
+      }
+    }
+
+    // 定向全量展开特定分类（知识点 / 考点 / 解法招法），其余分类保持 2 级概览态
+    expandCategory(targetCategory) {
+      const isTargetNode = (childData) => {
+        if (!childData || !childData.data) return false;
+        const d = childData.data;
+        const cat = d.category || '';
+        const uid = d.uid || '';
+        const text = d.text || '';
+        if (targetCategory === 'knowledge') {
+          return cat === 'knowledge' || uid === 'branch_knowledge' || uid.startsWith('sec_') || text.includes('知识') || text.startsWith('§');
+        }
+        if (targetCategory === 'exam') {
+          return cat === 'exam' || uid === 'branch_exam_points' || uid.includes('exam') || text.includes('考点');
+        }
+        if (targetCategory === 'method') {
+          return cat === 'method' || uid === 'branch_methods' || uid === 'branch_solution_methods' || uid.includes('method') || text.includes('解法') || text.includes('招法');
+        }
+        return false;
+      };
+
+      const setSubtreeExpand = (node, expandState) => {
+        if (!node) return;
+        if (!node.data) node.data = {};
+        node.data.expand = expandState;
+        if (Array.isArray(node.children)) {
+          node.children.forEach(child => setSubtreeExpand(child, expandState));
+        }
+      };
+
+      const treeData = this.mindMap.getData(false);
+      if (!treeData) return;
+
+      if (!treeData.data) treeData.data = {};
+      treeData.data.expand = true;
+
+      if (Array.isArray(treeData.children)) {
+        treeData.children.forEach(c2 => {
+          if (!c2.data) c2.data = {};
+          const isTarget = isTargetNode(c2);
+          if (isTarget) {
+            // 目标分类：递归全量展开到底（各节、定理、公式、招法细节全部展开）
+            setSubtreeExpand(c2, true);
+          } else {
+            // 非目标分类：保持第 3 级概览态（主分支自身展开，但其下直接子节点收纳折叠）
+            c2.data.expand = true;
+            if (Array.isArray(c2.children)) {
+              c2.children.forEach(child => setSubtreeExpand(child, false));
+            }
+          }
+        });
+      }
+
+      this.mindMap.setData(treeData);
+      this.mindMap.render();
+
+      const outliner = this.options.outliner || window._outlinerInstance;
+      if (outliner && typeof outliner.setData === 'function') {
+        outliner.setData(treeData);
+        if (typeof outliner.render === 'function') outliner.render();
+      }
+      if (typeof this.options.onLevelChange === 'function') {
+        this.options.onLevelChange(99);
       }
     }
 
@@ -410,8 +609,12 @@
       if (typeof this.mindMap.execCommand === 'function') {
         this.mindMap.execCommand('EXPAND_ALL');
       }
-      if (window._outlinerInstance && typeof window._outlinerInstance.expandAll === 'function') {
-        window._outlinerInstance.expandAll();
+      const outliner = this.options.outliner || window._outlinerInstance;
+      if (outliner && typeof outliner.expandAll === 'function') {
+        outliner.expandAll();
+      }
+      if (typeof this.options.onLevelChange === 'function') {
+        this.options.onLevelChange(99);
       }
     }
 
@@ -420,26 +623,30 @@
       if (typeof this.mindMap.execCommand === 'function') {
         this.mindMap.execCommand('UNEXPAND_ALL');
       }
-      if (window._outlinerInstance && typeof window._outlinerInstance.collapseAll === 'function') {
-        window._outlinerInstance.collapseAll();
+      const outliner = this.options.outliner || window._outlinerInstance;
+      if (outliner && typeof outliner.collapseAll === 'function') {
+        outliner.collapseAll();
+      }
+      if (typeof this.options.onLevelChange === 'function') {
+        this.options.onLevelChange(1);
       }
     }
   }
 
   // 静态暴露辅助方法供工具条调用
-  FeishuShortcutManager.duplicateActiveNode = function(mindMap) {
+  MindMapShortcutManager.duplicateActiveNode = function (mindMap) {
     const activeList = (mindMap.renderer && mindMap.renderer.activeNodeList) || [];
-    if (activeList.length === 1 && global._feishuShortcutManagerInstance) {
-      global._feishuShortcutManagerInstance.duplicateNode(activeList[0]);
+    if (activeList.length === 1 && global._mindMapShortcutManagerInstance) {
+      global._mindMapShortcutManagerInstance.duplicateNode(activeList[0]);
     }
   };
 
-  FeishuShortcutManager.drillDown = function(mindMap) {
+  MindMapShortcutManager.drillDown = function (mindMap) {
     const activeList = (mindMap.renderer && mindMap.renderer.activeNodeList) || [];
-    if (activeList.length === 1 && global._feishuShortcutManagerInstance) {
-      global._feishuShortcutManagerInstance.drillDown(activeList[0]);
+    if (activeList.length === 1 && global._mindMapShortcutManagerInstance) {
+      global._mindMapShortcutManagerInstance.drillDown(activeList[0]);
     }
   };
 
-  global.FeishuShortcutManager = FeishuShortcutManager;
+  global.MindMapShortcutManager = MindMapShortcutManager;
 })(typeof window !== 'undefined' ? window : this);

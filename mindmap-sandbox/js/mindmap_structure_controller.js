@@ -1,29 +1,31 @@
 /**
- * 思维导图结构与分支线搭配控制器 (FeishuStructureController)
+ * 思维导图结构与分支线搭配控制器 (MindMapStructureController)
  * 职责：
  * 1. 在视口左下角构建一体化控制区 (垂直导航栏 + 水平画布缩放与居中控制条)
  *    - 垂直栏：撤销、U型圆弧重做、结构搭配切换、缩放数字显示
- *    - 水平栏：缩小 (🔍-)、缩放滑动条 (20%~200%)、放大 (🔍+)、定位到中心节点 (⛶•)
- * 2. 渲染 1:1 结构与分支线全量平铺搭配卡片 (7 种结构 + 4 种分支线全部直观展示，零折叠隐藏)
+ *    - 水平栏：缩小、缩放滑动条 (20%~200%)、放大、定位到中心节点
+ * 2. 渲染结构与分支线全量平铺搭配卡片 (7 种结构 + 4 种分支线全部直观展示)
  * 3. 分支线以平滑圆弧曲线 (curve) 与圆角折线 (straight) 为核心
- * 4. 彻底整理所有文本显示，杜绝“飞书经典”等口吻
- * 5. 全程零表情符号规范
+ * 4. 支持挂载到任意指定宿主容器
  */
 (function (global) {
   'use strict';
 
-  class FeishuStructureController {
+  class MindMapStructureController {
     constructor(mindMap, options = {}) {
       if (!mindMap) {
-        throw new Error('[FeishuStructureController] 必须传入有效的 MindMap 实例');
+        throw new Error('[MindMapStructureController] 必须传入有效的 MindMap 实例');
       }
 
       this.mindMap = mindMap;
       this.options = Object.assign({
         defaultLayout: 'logicalStructure',
-        defaultLineStyle: 'straight'
+        defaultLineStyle: 'straight',
+        container: null,
+        onLayoutChange: null
       }, options);
 
+      this.mountContainer = this.options.container || document.body;
       this.currentLayout = this.mindMap.getLayout() || this.options.defaultLayout;
       this.currentLineStyle = this.mindMap.getThemeConfig('lineStyle') || this.options.defaultLineStyle;
       this.isPopoverVisible = false;
@@ -36,33 +38,33 @@
 
     initDom() {
       // 避免重复挂载
-      const oldWrapper = document.getElementById('feishuBottomDockWrapper');
+      const oldWrapper = this.mountContainer.querySelector('#mmBottomDockWrapper');
       if (oldWrapper) oldWrapper.remove();
-      const oldDock = document.getElementById('feishuBottomDock');
+      const oldDock = this.mountContainer.querySelector('#mmBottomDock');
       if (oldDock) oldDock.remove();
-      const oldPopover = document.getElementById('feishuStructurePopover');
+      const oldPopover = this.mountContainer.querySelector('#mmStructurePopover');
       if (oldPopover) oldPopover.remove();
 
       // 1. 左下角一体化控制区：垂直栏 + 水平缩放居中控制条
       const dockWrapper = document.createElement('div');
-      dockWrapper.id = 'feishuBottomDockWrapper';
-      dockWrapper.className = 'feishu-bottom-dock-wrapper';
+      dockWrapper.id = 'mmBottomDockWrapper';
+      dockWrapper.className = 'mm-bottom-dock-wrapper';
       dockWrapper.innerHTML = `
         <!-- 左侧垂直浮动控制条 (撤销/重做/结构/缩放比) -->
-        <div class="feishu-bottom-dock" id="feishuBottomDock">
-          <button type="button" class="feishu-dock-btn" id="btnDockUndo" title="撤销 (Ctrl+Z)">
+        <div class="mm-bottom-dock" id="mmBottomDock">
+          <button type="button" class="mm-dock-btn" id="btnDockUndo" title="撤销 (Ctrl+Z)">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 14 4 9l5-5"></path>
               <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"></path>
             </svg>
           </button>
-          <button type="button" class="feishu-dock-btn" id="btnDockRedo" title="重做 (Ctrl+Y)">
+          <button type="button" class="mm-dock-btn" id="btnDockRedo" title="重做 (Ctrl+Y)">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="m15 14 5-5-5-5"></path>
               <path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"></path>
             </svg>
           </button>
-          <button type="button" class="feishu-dock-btn" id="btnDockStructure" title="切换结构与分支线">
+          <button type="button" class="mm-dock-btn" id="btnDockStructure" title="切换结构与分支线">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="9" width="5" height="6" rx="1"></rect>
               <path d="M8 12h5"></path>
@@ -75,11 +77,11 @@
               <rect x="16" y="16" width="5" height="4" rx="1"></rect>
             </svg>
           </button>
-          <div class="feishu-dock-zoom" id="dockZoomText" title="缩放比例">100%</div>
+          <div class="mm-dock-zoom" id="dockZoomText" title="缩放比例">100%</div>
         </div>
 
-        <!-- 水平合并的画布大小调整条 (对齐实测图: 缩小 / 滑动条 / 放大 / 定位到中心节点) -->
-        <div class="feishu-zoom-slider-bar" id="feishuZoomSliderBar">
+        <!-- 水平合并的画布大小调整条 (缩小 / 滑动条 / 放大 / 定位到中心节点) -->
+        <div class="mm-zoom-slider-bar" id="mmZoomSliderBar">
           <button type="button" class="zoom-action-btn" id="btnDockZoomOut" title="缩小">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="11" cy="11" r="8"></circle>
@@ -112,15 +114,15 @@
           </div>
         </div>
       `;
-      document.body.appendChild(dockWrapper);
+      this.mountContainer.appendChild(dockWrapper);
       this.dockWrapper = dockWrapper;
-      this.dockEl = dockWrapper.querySelector('#feishuBottomDock');
-      this.zoomSliderBar = dockWrapper.querySelector('#feishuZoomSliderBar');
+      this.dockEl = dockWrapper.querySelector('#mmBottomDock');
+      this.zoomSliderBar = dockWrapper.querySelector('#mmZoomSliderBar');
 
-      // 2. 结构与分支线全量平铺卡片 (全部直接展示，杜绝教条式折叠)
+      // 2. 结构与分支线全量平铺卡片
       const popoverEl = document.createElement('div');
-      popoverEl.id = 'feishuStructurePopover';
-      popoverEl.className = 'feishu-structure-popover';
+      popoverEl.id = 'mmStructurePopover';
+      popoverEl.className = 'mm-structure-popover';
       popoverEl.innerHTML = `
         <div class="popover-section-title">结构</div>
         <div class="popover-grid structure-grid structure-grid-all">
@@ -227,7 +229,7 @@
           </button>
         </div>
       `;
-      document.body.appendChild(popoverEl);
+      this.mountContainer.appendChild(popoverEl);
       this.popoverEl = popoverEl;
     }
 
@@ -290,7 +292,7 @@
         }
       });
 
-      // 5. 水平合并缩放条：缩小 (🔍-)
+      // 5. 水平合并缩放条：缩小
       const btnZoomOut = this.dockWrapper.querySelector('#btnDockZoomOut');
       if (btnZoomOut) {
         btnZoomOut.addEventListener('click', (e) => {
@@ -302,7 +304,7 @@
         });
       }
 
-      // 6. 水平合并缩放条：放大 (🔍+)
+      // 6. 水平合并缩放条：放大
       const btnZoomIn = this.dockWrapper.querySelector('#btnDockZoomIn');
       if (btnZoomIn) {
         btnZoomIn.addEventListener('click', (e) => {
@@ -330,7 +332,7 @@
         });
       }
 
-      // 8. 定位到中心节点 (⛶•)
+      // 8. 定位到中心节点
       const btnLocateCenter = this.dockWrapper.querySelector('#btnDockLocateCenter');
       if (btnLocateCenter) {
         btnLocateCenter.addEventListener('click', (e) => {
@@ -403,9 +405,10 @@
       }
       this.updateActiveStates();
 
-      // 通知外部组件（例如 FeishuDragEnhancer）更新布局模式
-      if (window._feishuDragEnhancer && typeof window._feishuDragEnhancer.onLayoutChange === 'function') {
-        window._feishuDragEnhancer.onLayoutChange(layoutName);
+      if (typeof this.options.onLayoutChange === 'function') {
+        this.options.onLayoutChange(layoutName);
+      } else if (window._mindMapDragEnhancer && typeof window._mindMapDragEnhancer.onLayoutChange === 'function') {
+        window._mindMapDragEnhancer.onLayoutChange(layoutName);
       }
     }
 
@@ -427,7 +430,6 @@
     }
 
     updateActiveStates() {
-      // 结构按钮状态高亮
       const allStructBtns = this.popoverEl.querySelectorAll('.structure-btn');
       allStructBtns.forEach(btn => {
         if (btn.dataset.layout === this.currentLayout) {
@@ -437,7 +439,6 @@
         }
       });
 
-      // 分支线按钮状态高亮
       const allLineBtns = this.popoverEl.querySelectorAll('.line-style-btn');
       allLineBtns.forEach(btn => {
         if (btn.dataset.lineStyle === this.currentLineStyle) {
@@ -448,7 +449,7 @@
       });
     }
 
-    // 更新缩放显示 (严密容错链，彻底根除 NaN，并同步更新水平滑动条)
+    // 更新缩放显示并同步更新水平滑动条
     updateZoomDisplay(scaleVal) {
       const zoomEl = this.dockWrapper ? this.dockWrapper.querySelector('#dockZoomLevelText, #dockZoomText') : null;
       let scale = (typeof scaleVal === 'number' && !isNaN(scaleVal)) ? scaleVal : null;
@@ -473,7 +474,6 @@
         zoomEl.textContent = `${pct}%`;
       }
 
-      // 同步滑动条数值与进度底色
       const slider = this.dockWrapper ? this.dockWrapper.querySelector('#dockZoomSlider') : null;
       if (slider) {
         slider.value = pct;
@@ -485,5 +485,5 @@
     }
   }
 
-  global.FeishuStructureController = FeishuStructureController;
+  global.MindMapStructureController = MindMapStructureController;
 })(typeof window !== 'undefined' ? window : this);

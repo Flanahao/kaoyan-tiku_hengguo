@@ -39,7 +39,7 @@ html, body {
   line-height: inherit !important;
 }
 
-/* 顶部悬浮控制栏 - 飞书设计规范 */
+/* 顶部悬浮控制栏 */
 .floating-toolbar {
   position: fixed;
   top: 16px;
@@ -122,6 +122,12 @@ html, body {
   transform: translateY(1px);
 }
 
+.tool-btn.active {
+  background: #e1eaff;
+  color: #3370ff;
+  font-weight: 600;
+}
+
 .tool-btn kbd {
   font-size: 10px;
   font-family: inherit;
@@ -180,7 +186,7 @@ html, body {
   color: #1f2329;
 }
 
-/* 左下角快捷键指引提示卡片 (上移避开飞书浮动控制栏) */
+/* 左下角快捷键指引提示卡片 */
 .shortcut-tips-card {
   position: fixed;
   bottom: 175px;
@@ -207,9 +213,9 @@ html, body {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   飞书左下角垂直浮动控制条与结构搭配卡片
+   左下角垂直浮动控制条与结构搭配卡片
    ───────────────────────────────────────────────────────────── */
-.feishu-bottom-dock-wrapper {
+.mm-bottom-dock-wrapper {
   position: fixed;
   bottom: 20px;
   left: 20px;
@@ -219,7 +225,7 @@ html, body {
   gap: 8px;
 }
 
-.feishu-bottom-dock {
+.mm-bottom-dock {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -233,7 +239,7 @@ html, body {
   box-shadow: 0 4px 14px rgba(31, 35, 41, 0.08);
 }
 
-.feishu-dock-btn {
+.mm-dock-btn {
   width: 28px;
   height: 28px;
   border-radius: 6px;
@@ -247,17 +253,17 @@ html, body {
   transition: all 0.15s ease;
 }
 
-.feishu-dock-btn:hover {
+.mm-dock-btn:hover {
   background: #f2f3f5;
   color: #1f2329;
 }
 
-.feishu-dock-btn.active {
+.mm-dock-btn.active {
   background: #e1eaff;
   color: #3370ff;
 }
 
-.feishu-dock-zoom {
+.mm-dock-zoom {
   font-size: 11px;
   font-weight: 600;
   color: #646a73;
@@ -268,12 +274,12 @@ html, body {
   cursor: pointer;
 }
 
-.feishu-dock-zoom:hover {
+.mm-dock-zoom:hover {
   color: #3370ff;
 }
 
-/* 水平合并的缩放滑动条与定位条 (1:1 对齐用户实测图) */
-.feishu-zoom-slider-bar {
+/* 水平合并的缩放滑动条与定位条 */
+.mm-zoom-slider-bar {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -288,7 +294,7 @@ html, body {
   box-sizing: border-box;
 }
 
-.feishu-zoom-slider-bar .zoom-action-btn {
+.mm-zoom-slider-bar .zoom-action-btn {
   width: 26px;
   height: 26px;
   border-radius: 6px;
@@ -303,11 +309,11 @@ html, body {
   padding: 0;
 }
 
-.feishu-zoom-slider-bar .zoom-action-btn:hover {
+.mm-zoom-slider-bar .zoom-action-btn:hover {
   background: #f2f3f5;
 }
 
-.feishu-zoom-slider-bar .zoom-slider-track-wrap {
+.mm-zoom-slider-bar .zoom-slider-track-wrap {
   width: 130px;
   display: flex;
   align-items: center;
@@ -384,8 +390,8 @@ html, body {
   opacity: 1;
 }
 
-/* 结构与分支线浮动面板 (移至控制条正上方) */
-.feishu-structure-popover {
+/* 结构与分支线浮动面板 */
+.mm-structure-popover {
   position: fixed;
   bottom: 74px;
   left: 20px;
@@ -400,7 +406,7 @@ html, body {
   animation: popoverFadeIn 0.18s cubic-bezier(0, 0, 0.2, 1);
 }
 
-.feishu-structure-popover.visible {
+.mm-structure-popover.visible {
   display: block;
 }
 
@@ -415,7 +421,7 @@ html, body {
   }
 }
 
-.feishu-structure-popover .popover-section-title {
+.mm-structure-popover .popover-section-title {
   font-size: 12px;
   font-weight: 500;
   color: #8f959e;
@@ -423,27 +429,27 @@ html, body {
   user-select: none;
 }
 
-.feishu-structure-popover .popover-section-title:not(:first-child) {
+.mm-structure-popover .popover-section-title:not(:first-child) {
   margin-top: 14px;
 }
 
-.feishu-structure-popover .popover-grid {
+.mm-structure-popover .popover-grid {
   display: grid;
   gap: 8px;
 }
 
-.feishu-structure-popover .structure-grid,
-.feishu-structure-popover .structure-grid-all {
+.mm-structure-popover .structure-grid,
+.mm-structure-popover .structure-grid-all {
   grid-template-columns: repeat(4, 1fr);
 }
 
-.feishu-structure-popover .line-style-grid,
-.feishu-structure-popover .line-style-grid-all {
+.mm-structure-popover .line-style-grid,
+.mm-structure-popover .line-style-grid-all {
   grid-template-columns: repeat(2, 1fr);
 }
 
-.feishu-structure-popover .structure-btn,
-.feishu-structure-popover .line-style-btn {
+.mm-structure-popover .structure-btn,
+.mm-structure-popover .line-style-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -455,47 +461,48 @@ html, body {
   transition: all 0.15s ease;
 }
 
-.feishu-structure-popover .structure-btn {
+.mm-structure-popover .structure-btn {
   height: 44px;
 }
 
-.feishu-structure-popover .line-style-btn {
+.mm-structure-popover .line-style-btn {
   height: 36px;
 }
 
-.feishu-structure-popover .structure-btn:hover,
-.feishu-structure-popover .line-style-btn:hover {
+.mm-structure-popover .structure-btn:hover,
+.mm-structure-popover .line-style-btn:hover {
   background: #f2f3f5;
   color: #1f2329;
 }
 
-.feishu-structure-popover .structure-btn.active,
-.feishu-structure-popover .line-style-btn.active {
+.mm-structure-popover .structure-btn.active,
+.mm-structure-popover .line-style-btn.active {
   background: #e1eaff;
   border-color: #3370ff;
   color: #3370ff;
 }
 
 /* ─────────────────────────────────────────────────────────────
-   飞书卡片富节点与数学公式光学对齐规范
+   卡片富节点与数学公式光学对齐规范
    ───────────────────────────────────────────────────────────── */
-.feishu-node-card {
+.mm-node-card {
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  width: max-content;
+  min-height: 100%;
   user-select: none;
   -webkit-user-select: none;
-  word-break: break-word;
-  white-space: normal;
+  white-space: nowrap;
   text-align: left;
+  gap: 6px;
 }
 
-/* 根节点卡片: 飞书品牌蓝实体胶囊 */
-.feishu-node-card.level-0,
-.feishu-node-card.is-root {
+/* 根节点卡片: 品牌蓝实体胶囊 */
+.mm-node-card.level-0,
+.mm-node-card.is-root {
   background: #3370ff;
   color: #ffffff;
   padding: 10px 18px;
@@ -505,56 +512,173 @@ html, body {
   box-shadow: 0 4px 12px rgba(51, 112, 255, 0.25);
 }
 
-/* 二级节点卡片: 飞书商务浅灰底色 */
-.feishu-node-card.level-1 {
+/* 二级节点卡片: 浅灰底色 */
+.mm-node-card.level-1 {
   background: #eff0f1;
   color: #1f2329;
-  padding: 6px 14px;
+  padding: 6px 12px;
   border-radius: 6px;
   font-size: 14px;
   font-weight: 500;
-  border: 1px solid rgba(31, 35, 41, 0.04);
+  border: 1px solid rgba(31, 35, 41, 0.05);
 }
 
-/* 三级及叶子节点卡片: 纯文本轻盈无底色 */
-.feishu-node-card.level-2,
-.feishu-node-card:not(.level-0):not(.level-1) {
+/* 三级及叶子节点卡片: 紧凑轻量排版 */
+.mm-node-card.level-2,
+.mm-node-card:not(.level-0):not(.level-1) {
   background: transparent;
   color: #1f2329;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 3px 8px;
+  border-radius: 5px;
   font-size: 13px;
   font-weight: 400;
 }
 
 /* 卡片内部正文布局与中轴对齐 */
-.feishu-node-content {
+.mm-node-content {
   display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
-  line-height: 1.5;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  line-height: 1.45;
   gap: 2px;
 }
 
-.feishu-node-card.level-0 .feishu-node-content {
+.mm-node-card.level-0 .mm-node-content {
+  color: #ffffff;
+}
+
+/* 语义前缀徽标 (定义/定理/公式/要领/步骤/避坑/同步块/必考) */
+.mm-node-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  background: #e8f3ff;
+  color: #3370ff;
+  border: 1px solid rgba(51, 112, 255, 0.18);
+}
+
+.mm-node-tag[data-tag-type="def"] {
+  background: #e8f3ff;
+  color: #165dff;
+  border-color: rgba(22, 93, 255, 0.2);
+}
+
+.mm-node-tag[data-tag-type="thm"],
+.mm-node-tag[data-tag-type="prop"] {
+  background: #f5e8ff;
+  color: #722ed1;
+  border-color: rgba(114, 46, 209, 0.2);
+}
+
+.mm-node-tag[data-tag-type="formula"] {
+  background: #e6fffb;
+  color: #08979c;
+  border-color: rgba(8, 151, 156, 0.2);
+}
+
+.mm-node-tag[data-tag-type="method"],
+.mm-node-tag[data-tag-type="step"] {
+  background: #e8ffea;
+  color: #009a29;
+  border-color: rgba(0, 154, 41, 0.2);
+}
+
+.mm-node-tag[data-tag-type="pitfall"] {
+  background: #ffece8;
+  color: #f53f3f;
+  border-color: rgba(245, 63, 63, 0.22);
+}
+
+.mm-node-tag[data-tag-type="sync"] {
+  background: #fff7e8;
+  color: #d46b08;
+  border-color: rgba(212, 107, 8, 0.22);
+}
+
+.mm-node-tag[data-tag-type="exam"] {
+  background: #fff1f0;
+  color: #cf1322;
+  border-color: rgba(207, 19, 34, 0.25);
+}
+
+.mm-node-tag[data-tag-type="section"] {
+  background: #f2f3f5;
+  color: #4e5969;
+  border-color: rgba(78, 89, 105, 0.18);
+}
+
+/* 尾部快捷交互胶囊 (做题直达 / 共鸣关联 / 几何图解) */
+.mm-node-action-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 2px 7px;
+  border-radius: 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.mm-node-action-pill.action-questions {
+  background: rgba(51, 112, 255, 0.1);
+  color: #3370ff;
+  border: 1px solid rgba(51, 112, 255, 0.25);
+}
+
+.mm-node-action-pill.action-questions:hover {
+  background: #3370ff;
+  color: #ffffff;
+}
+
+.mm-node-action-pill.action-resonance {
+  background: rgba(250, 140, 22, 0.12);
+  color: #d46b08;
+  border: 1px solid rgba(250, 140, 22, 0.28);
+}
+
+.mm-node-action-pill.action-resonance:hover {
+  background: #fa8c16;
+  color: #ffffff;
+}
+
+.mm-node-action-pill.action-widget {
+  background: rgba(114, 46, 209, 0.1);
+  color: #722ed1;
+  border: 1px solid rgba(114, 46, 209, 0.25);
+}
+
+.mm-node-action-pill.action-widget:hover {
+  background: #722ed1;
   color: #ffffff;
 }
 
 /* KaTeX 数学公式光学中轴对齐与微间距 */
-.feishu-node-content .katex {
+.mm-node-content .katex {
   font-size: 1.05em;
   vertical-align: -0.1em;
   margin: 0 2px;
   line-height: normal;
 }
 
-.feishu-node-content .katex-display {
+.mm-node-content .katex-display {
   margin: 4px 0;
   display: inline-block;
 }
 
 /* 行内代码样式 */
-.feishu-node-content code {
+.mm-node-content code {
   background: rgba(0, 0, 0, 0.06);
   padding: 1px 4px;
   border-radius: 3px;
@@ -562,21 +686,21 @@ html, body {
   font-size: 0.9em;
 }
 
-.feishu-node-card.level-0 .feishu-node-content code {
+.mm-node-card.level-0 .mm-node-content code {
   background: rgba(255, 255, 255, 0.22);
   color: #ffffff;
 }
 
 /* ─────────────────────────────────────────────────────────────
-   飞书导图原位源码编辑框 (In-Place Editor)
+   导图原位源码编辑框 (In-Place Editor)
    ───────────────────────────────────────────────────────────── */
-.feishu-editor-wrap {
+.mm-editor-wrap {
   position: fixed;
   z-index: 1000;
   box-sizing: border-box;
 }
 
-.feishu-editor-input {
+.mm-editor-input {
   box-sizing: border-box;
   width: 100%;
   min-width: 160px;
@@ -598,65 +722,65 @@ html, body {
 }
 
 /* 导图编辑态：彻底隐藏底层 SVG 激活框与内容，杜绝双重方框重叠 */
-.smm-node.is-feishu-editing .smm-hover-node,
-.smm-node.is-feishu-editing .smm-node-shape {
+.smm-node.is-mm-editing .smm-hover-node,
+.smm-node.is-mm-editing .smm-node-shape {
   display: none !important;
   opacity: 0 !important;
   visibility: hidden !important;
 }
 
-.smm-node.is-feishu-editing foreignObject {
+.smm-node.is-mm-editing foreignObject {
   opacity: 0 !important;
 }
 
 /* ─────────────────────────────────────────────────────────────
-   飞书 7 色文本与公式容器高亮样式 (紧密贴合文字/公式流，卡片底色与外框保持不变)
+   7 色文本与公式容器高亮样式
    ───────────────────────────────────────────────────────────── */
-.feishu-node-content[class*="feishu-hl-"] {
+.mm-node-content[class*="mm-hl-"] {
   border-radius: 4px;
   padding: 2px 6px;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }
 
-.feishu-node-content.feishu-hl-pink,
-.feishu-node-content.feishu-hl-red {
+.mm-node-content.mm-hl-pink,
+.mm-node-content.mm-hl-red {
   background-color: #ffc5c0 !important;
   color: #1f2329 !important;
 }
-.feishu-node-content.feishu-hl-yellow {
+.mm-node-content.mm-hl-yellow {
   background-color: #ffe699 !important;
   color: #1f2329 !important;
 }
-.feishu-node-content.feishu-hl-purple {
+.mm-node-content.mm-hl-purple {
   background-color: #f6d5f8 !important;
   color: #1f2329 !important;
 }
-.feishu-node-content.feishu-hl-blue {
+.mm-node-content.mm-hl-blue {
   background-color: #badbff !important;
   color: #1f2329 !important;
 }
-.feishu-node-content.feishu-hl-cyan {
+.mm-node-content.mm-hl-cyan {
   background-color: #a8f0eb !important;
   color: #1f2329 !important;
 }
-.feishu-node-content.feishu-hl-green {
+.mm-node-content.mm-hl-green {
   background-color: #e0f3a0 !important;
   color: #1f2329 !important;
 }
-.feishu-node-content.feishu-hl-gray {
+.mm-node-content.mm-hl-gray {
   background-color: #dee2e6 !important;
   color: #1f2329 !important;
 }
-.feishu-node-content.feishu-hl-orange {
+.mm-node-content.mm-hl-orange {
   background-color: #ffd8b8 !important;
   color: #1f2329 !important;
 }
 
 /* ─────────────────────────────────────────────────────────────
-   悬浮实时渲染胶囊 (Live Preview Capsule) - 纯净公式卡片
+   悬浮实时渲染胶囊 (Live Preview Capsule)
    ───────────────────────────────────────────────────────────── */
-.feishu-preview-capsule {
+.mm-preview-capsule {
   position: fixed;
   z-index: 1001;
   box-sizing: border-box;
@@ -673,7 +797,7 @@ html, body {
   transition: top 0.08s ease, left 0.08s ease;
 }
 
-.feishu-preview-capsule .capsule-content {
+.mm-preview-capsule .capsule-content {
   font-size: 13px;
   color: #1f2329;
   line-height: 1.5;
@@ -683,16 +807,16 @@ html, body {
   gap: 2px;
 }
 
-.feishu-preview-capsule .capsule-content .katex {
+.mm-preview-capsule .capsule-content .katex {
   font-size: 1.05em;
   vertical-align: -0.1em;
   margin: 0 2px;
 }
 
 /* ─────────────────────────────────────────────────────────────
-   飞书底部固定深色工具条 (Bottom Fixed Toolbar)
+   底部固定深色工具条 (Bottom Fixed Toolbar)
    ───────────────────────────────────────────────────────────── */
-.feishu-bottom-toolbar {
+.mm-bottom-toolbar {
   position: fixed;
   bottom: 20px;
   left: 50%;
@@ -706,15 +830,15 @@ html, body {
   padding: 4px 8px;
   gap: 4px;
   user-select: none;
-  animation: feishuBarFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: mmBarFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes feishuBarFadeIn {
+@keyframes mmBarFadeIn {
   from { opacity: 0; transform: translate(-50%, 10px); }
   to { opacity: 1; transform: translate(-50%, 0); }
 }
 
-.feishu-bottom-toolbar .bar-btn {
+.mm-bottom-toolbar .bar-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -733,17 +857,17 @@ html, body {
   font-weight: 500;
 }
 
-.feishu-bottom-toolbar .bar-btn:hover {
+.mm-bottom-toolbar .bar-btn:hover {
   background: rgba(255, 255, 255, 0.12);
   color: #ffffff;
 }
 
-.feishu-bottom-toolbar .bar-btn.active {
+.mm-bottom-toolbar .bar-btn.active {
   background: rgba(51, 112, 255, 0.35);
   color: #3370ff;
 }
 
-.feishu-bottom-toolbar .bar-divider {
+.mm-bottom-toolbar .bar-divider {
   width: 1px;
   height: 18px;
   background: rgba(255, 255, 255, 0.15);
@@ -751,7 +875,7 @@ html, body {
 }
 
 /* 颜色选择浮层 */
-.feishu-color-popover {
+.mm-color-popover {
   position: absolute;
   bottom: calc(100% + 10px);
   left: 0;
@@ -765,12 +889,12 @@ html, body {
   z-index: 1002;
 }
 
-.feishu-color-popover.show {
+.mm-color-popover.show {
   display: flex;
 }
 
-.feishu-color-popover .color-dot,
-.feishu-color-popover .color-swatch-btn {
+.mm-color-popover .color-dot,
+.mm-color-popover .color-swatch-btn {
   width: 24px;
   height: 24px;
   border-radius: 4px;
@@ -789,24 +913,24 @@ html, body {
   line-height: 1;
 }
 
-.feishu-color-popover .color-dot:hover,
-.feishu-color-popover .color-swatch-btn:hover {
+.mm-color-popover .color-dot:hover,
+.mm-color-popover .color-swatch-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
   border-color: rgba(31, 35, 41, 0.35);
 }
 
-.feishu-color-popover .color-dot.is-clear,
-.feishu-color-popover .color-swatch-btn.is-clear {
+.mm-color-popover .color-dot.is-clear,
+.mm-color-popover .color-swatch-btn.is-clear {
   background: #ffffff !important;
   color: #8f959e !important;
   font-size: 13px;
 }
 
 /* ─────────────────────────────────────────────────────────────
-   飞书快捷键指南抽屉 (Right Drawer)
+   快捷键指南抽屉 (Right Drawer)
    ───────────────────────────────────────────────────────────── */
-.feishu-shortcut-drawer {
+.mm-shortcut-drawer {
   position: fixed;
   top: 0;
   right: -360px;
@@ -821,7 +945,7 @@ html, body {
   box-sizing: border-box;
 }
 
-.feishu-shortcut-drawer.open {
+.mm-shortcut-drawer.open {
   right: 0;
 }
 
@@ -917,9 +1041,9 @@ html, body {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   飞书选区悬浮气泡菜单 (Selection Bubble Menu)
+   选区悬浮气泡菜单 (Selection Bubble Menu)
    ───────────────────────────────────────────────────────────── */
-.feishu-bubble-menu {
+.mm-bubble-menu {
   position: fixed;
   z-index: 1005;
   display: none;
@@ -931,16 +1055,16 @@ html, body {
   gap: 2px;
   user-select: none;
   pointer-events: auto;
-  animation: feishuBubbleFadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: mmBubbleFadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
   transform: translate(-50%, -100%);
 }
 
-@keyframes feishuBubbleFadeIn {
+@keyframes mmBubbleFadeIn {
   from { opacity: 0; transform: translate(-50%, -90%); }
   to { opacity: 1; transform: translate(-50%, -100%); }
 }
 
-.feishu-bubble-menu .bubble-btn {
+.mm-bubble-menu .bubble-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -959,23 +1083,23 @@ html, body {
   white-space: nowrap;
 }
 
-.feishu-bubble-menu .bubble-btn:hover {
+.mm-bubble-menu .bubble-btn:hover {
   background: rgba(255, 255, 255, 0.15);
   color: #ffffff;
 }
 
-.feishu-bubble-menu .bubble-btn:active {
+.mm-bubble-menu .bubble-btn:active {
   transform: scale(0.95);
 }
 
-.feishu-bubble-menu .bubble-divider {
+.mm-bubble-menu .bubble-divider {
   width: 1px;
   height: 16px;
   background: rgba(255, 255, 255, 0.18);
   margin: 0 3px;
 }
 
-.feishu-bubble-popover {
+.mm-bubble-popover {
   position: absolute;
   bottom: calc(100% + 8px);
   left: 50%;
@@ -990,12 +1114,12 @@ html, body {
   z-index: 1006;
 }
 
-.feishu-bubble-popover.show {
+.mm-bubble-popover.show {
   display: flex;
 }
 
-.feishu-bubble-popover .color-dot,
-.feishu-bubble-popover .color-swatch-btn {
+.mm-bubble-popover .color-dot,
+.mm-bubble-popover .color-swatch-btn {
   width: 22px;
   height: 22px;
   border-radius: 4px;
@@ -1014,15 +1138,15 @@ html, body {
   line-height: 1;
 }
 
-.feishu-bubble-popover .color-dot:hover,
-.feishu-bubble-popover .color-swatch-btn:hover {
+.mm-bubble-popover .color-dot:hover,
+.mm-bubble-popover .color-swatch-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
   border-color: rgba(31, 35, 41, 0.35);
 }
 
-.feishu-bubble-popover .color-dot.is-clear,
-.feishu-bubble-popover .color-swatch-btn.is-clear {
+.mm-bubble-popover .color-dot.is-clear,
+.mm-bubble-popover .color-swatch-btn.is-clear {
   background: #ffffff !important;
   color: #8f959e !important;
   font-size: 12px;
@@ -1031,12 +1155,12 @@ html, body {
 /* ─────────────────────────────────────────────────────────────
    7 色行内文本高亮体系 (Inline Text Highlights)
    ───────────────────────────────────────────────────────────── */
-mark.feishu-inline-hl,
-span.feishu-inline-hl,
-mark[class*="feishu-inline-hl-"],
-span[class*="feishu-inline-hl-"],
-mark[class*="feishu-text-hl-"],
-span[class*="feishu-text-hl-"] {
+mark.mm-inline-hl,
+span.mm-inline-hl,
+mark[class*="mm-inline-hl-"],
+span[class*="mm-inline-hl-"],
+mark[class*="mm-text-hl-"],
+span[class*="mm-text-hl-"] {
   padding: 1px 4px;
   border-radius: 4px;
   margin: 0 1px;
@@ -1045,58 +1169,58 @@ span[class*="feishu-text-hl-"] {
   display: inline;
 }
 
-mark.feishu-inline-hl-pink, span.feishu-inline-hl-pink,
-mark.feishu-text-hl-pink, span.feishu-text-hl-pink,
-mark.feishu-inline-hl-red, span.feishu-inline-hl-red,
-mark.feishu-text-hl-red, span.feishu-text-hl-red {
+mark.mm-inline-hl-pink, span.mm-inline-hl-pink,
+mark.mm-text-hl-pink, span.mm-text-hl-pink,
+mark.mm-inline-hl-red, span.mm-inline-hl-red,
+mark.mm-text-hl-red, span.mm-text-hl-red {
   background: #ffc5c0 !important;
   color: #1f2329 !important;
 }
 
-mark.feishu-inline-hl-yellow, span.feishu-inline-hl-yellow,
-mark.feishu-text-hl-yellow, span.feishu-text-hl-yellow {
+mark.mm-inline-hl-yellow, span.mm-inline-hl-yellow,
+mark.mm-text-hl-yellow, span.mm-text-hl-yellow {
   background: #ffe699 !important;
   color: #1f2329 !important;
 }
 
-mark.feishu-inline-hl-purple, span.feishu-inline-hl-purple,
-mark.feishu-text-hl-purple, span.feishu-text-hl-purple {
+mark.mm-inline-hl-purple, span.mm-inline-hl-purple,
+mark.mm-text-hl-purple, span.mm-text-hl-purple {
   background: #f6d5f8 !important;
   color: #1f2329 !important;
 }
 
-mark.feishu-inline-hl-blue, span.feishu-inline-hl-blue,
-mark.feishu-text-hl-blue, span.feishu-text-hl-blue {
+mark.mm-inline-hl-blue, span.mm-inline-hl-blue,
+mark.mm-text-hl-blue, span.mm-text-hl-blue {
   background: #badbff !important;
   color: #1f2329 !important;
 }
 
-mark.feishu-inline-hl-cyan, span.feishu-inline-hl-cyan,
-mark.feishu-text-hl-cyan, span.feishu-text-hl-cyan {
+mark.mm-inline-hl-cyan, span.mm-inline-hl-cyan,
+mark.mm-text-hl-cyan, span.mm-text-hl-cyan {
   background: #a8f0eb !important;
   color: #1f2329 !important;
 }
 
-mark.feishu-inline-hl-green, span.feishu-inline-hl-green,
-mark.feishu-text-hl-green, span.feishu-text-hl-green {
+mark.mm-inline-hl-green, span.mm-inline-hl-green,
+mark.mm-text-hl-green, span.mm-text-hl-green {
   background: #e0f3a0 !important;
   color: #1f2329 !important;
 }
 
-mark.feishu-inline-hl-gray, span.feishu-inline-hl-gray,
-mark.feishu-text-hl-gray, span.feishu-text-hl-gray {
+mark.mm-inline-hl-gray, span.mm-inline-hl-gray,
+mark.mm-text-hl-gray, span.mm-text-hl-gray {
   background: #dee2e6 !important;
   color: #1f2329 !important;
 }
 
-mark.feishu-inline-hl-orange, span.feishu-inline-hl-orange,
-mark.feishu-text-hl-orange, span.feishu-text-hl-orange {
+mark.mm-inline-hl-orange, span.mm-inline-hl-orange,
+mark.mm-text-hl-orange, span.mm-text-hl-orange {
   background: #ffd8b8 !important;
   color: #1f2329 !important;
 }
 
 /* 行内代码与行内排版微调 */
-.feishu-node-content code,
+.mm-node-content code,
 .outliner-display-view code,
 .capsule-content code {
   font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
@@ -1108,28 +1232,28 @@ mark.feishu-text-hl-orange, span.feishu-text-hl-orange {
   margin: 0 2px;
 }
 
-.feishu-node-content strong,
+.mm-node-content strong,
 .outliner-display-view strong,
 .capsule-content strong {
   font-weight: 700;
   color: inherit;
 }
 
-.feishu-node-content em,
+.mm-node-content em,
 .outliner-display-view em,
 .capsule-content em {
   font-style: italic;
   color: inherit;
 }
 
-.feishu-node-content u,
+.mm-node-content u,
 .outliner-display-view u,
 .capsule-content u {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
-.feishu-node-content del,
+.mm-node-content del,
 .outliner-display-view del,
 .capsule-content del {
   text-decoration: line-through;
@@ -1137,16 +1261,19 @@ mark.feishu-text-hl-orange, span.feishu-text-hl-orange {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   大纲笔记视图彻底纯净化：完全隐藏思维导图专用的底部控制栏与左下角浮动组件
+   大纲笔记视图彻底纯净化：隐藏思维导图专用的底部控制栏与左下角浮动组件
    ───────────────────────────────────────────────────────────── */
-body.view-mode-outline .feishu-bottom-dock-wrapper,
-body.view-mode-outline .feishu-bottom-toolbar,
-body.view-mode-outline .feishu-bottom-dock,
-body.view-mode-outline .feishu-zoom-slider-bar,
-body.view-mode-outline .feishu-structure-popover,
+body.view-mode-outline .mm-bottom-dock-wrapper,
+body.view-mode-outline .mm-bottom-toolbar,
+body.view-mode-outline .mm-bottom-dock,
+body.view-mode-outline .mm-zoom-slider-bar,
+body.view-mode-outline .mm-structure-popover,
 body.view-mode-outline .floating-viewport-bar,
-body.view-mode-outline .shortcut-tips-card {
+body.view-mode-outline .shortcut-tips-card,
+.view-mode-outline .mm-bottom-dock-wrapper,
+.view-mode-outline .mm-bottom-toolbar,
+.view-mode-outline .mm-bottom-dock,
+.view-mode-outline .mm-zoom-slider-bar,
+.view-mode-outline .mm-structure-popover {
   display: none !important;
 }
-
-

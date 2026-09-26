@@ -1,21 +1,20 @@
 /**
- * 飞书思维导图磁吸拖拽与意图仲裁引擎 (FeishuDragEnhancer - Unified Canvas Space Version)
+ * 思维导图磁吸拖拽与意图仲裁引擎 (MindMapDragEnhancer - Unified Canvas Space Version)
  * 核心特性：
  * 1. 严格统一至 SVG Canvas 内部局部坐标系 (scale / pan 变换完全归一)
  * 2. 节点主体绝对优先命中与中心加权 (Body Hit Priority & Center Weighting)
- * 3. 空间 AABB + 右向宽域延展包络面 (AABB with Right-Flank Apron)
+ * 3. 空间 AABB + 宽域延展包络面 (AABB with Multi-Direction Apron)
  * 4. 严格兄弟物理间隙插槽仲裁 (Strict Sibling Gutter Slot Decider)
  * 5. 垂直居中直角圆角折线动态渲染 (Centered Step Orthogonal Magnetic Line)
  * 6. 迟滞脱离阈值防抖 (Hysteresis Snap Radius)
- * 7. 全程零表情符号规范
  */
 (function (global) {
   'use strict';
 
-  class FeishuDragEnhancer {
+  class MindMapDragEnhancer {
     constructor(mindMap, options = {}) {
       if (!mindMap || !mindMap.drag) {
-        console.warn('[FeishuDragEnhancer] 无法获取 mindMap.drag 实例，增强器未激活');
+        console.warn('[MindMapDragEnhancer] 无法获取 mindMap.drag 实例，增强器未激活');
         return;
       }
 
@@ -48,7 +47,7 @@
         })
         .fill('none')
         .hide();
-      this.magneticLine.node.setAttribute('class', 'smm-feishu-magnetic-line');
+      this.magneticLine.node.setAttribute('class', 'smm-mm-magnetic-line');
 
       // 候选父节点吸附高亮光晕边框
       this.parentHighlight = this.mindMap.otherDraw.rect()
@@ -61,7 +60,7 @@
           color: this.options.highlightFill
         })
         .hide();
-      this.parentHighlight.node.setAttribute('class', 'smm-feishu-parent-highlight');
+      this.parentHighlight.node.setAttribute('class', 'smm-mm-parent-highlight');
     }
 
     // 挂接 SimpleMindMap 原生拖拽生命周期
@@ -151,9 +150,7 @@
         return true;
       });
 
-      // -------------------------------------------------------------
-      // 判定 1: 严格同级插入插槽判定 (Strict Sibling Gutter Check - 绝对第一优先)
-      // -------------------------------------------------------------
+      // 判定 1: 严格同级插入插槽判定
       const siblingSlot = this.detectSiblingGutterSlot(candidates, cursorCanvasX, cursorCanvasY);
       if (siblingSlot) {
         this.drag.overlapNode = null;
@@ -161,7 +158,6 @@
         this.drag.nextNode = siblingSlot.nextNode;
         this.cleanup();
 
-        // 渲染同级插入水平蓝色指引线
         if (this.drag.placeholder && typeof this.drag.setPlaceholderRect === 'function') {
           const refNode = siblingSlot.prevNode || siblingSlot.nextNode;
           if (refNode) {
@@ -180,7 +176,7 @@
                 y: pY,
                 dir: 'right'
               });
-            } catch (e) {
+            } catch (err) {
               // 容错捕获
             }
           }
@@ -188,23 +184,19 @@
         return;
       }
 
-      // -------------------------------------------------------------
-      // 判定 2: 卡片核心躯干命中 (Core Body Hit - 内收保护，光标主导)
-      // -------------------------------------------------------------
+      // 判定 2: 卡片核心躯干命中
       let directBodyHitNode = null;
       let minBodyCenterDist = Infinity;
 
       for (let i = 0; i < candidates.length; i++) {
         const node = candidates[i];
         const padX = 4;
-        // 垂直内收 4px，仅命中卡片中央 60% 核心区，绝不侵占上下边缘与缝隙
         const padY = -4;
         const bLeft = node.left - padX;
         const bRight = node.left + node.width + padX;
         const bTop = node.top - padY;
         const bBottom = node.top + node.height + padY;
 
-        // 仅由用户眼睛注视的光标点决定，彻底杜绝克隆中心偏移干扰
         const isCursorInBody = (cursorCanvasX >= bLeft && cursorCanvasX <= bRight && cursorCanvasY >= bTop && cursorCanvasY <= bBottom);
 
         if (isCursorInBody) {
@@ -223,14 +215,10 @@
         return;
       }
 
-      // -------------------------------------------------------------
-      // 判定 3: 侧翼引流子级磁吸 (Multi-Direction Apron Snap)
-      // -------------------------------------------------------------
+      // 判定 3: 侧翼引流子级磁吸
       const bestCandidate = this.checkApronSnap(candidates, cursorCanvasX, cursorCanvasY, cloneAnchorX, cloneAnchorY);
 
-      // -------------------------------------------------------------
-      // 判定 4: 执行磁吸或复位 (Far-Field Detach)
-      // -------------------------------------------------------------
+      // 判定 4: 执行磁吸或复位
       if (bestCandidate) {
         this.applyMagneticSnap(bestCandidate, cloneAnchorX, cloneAnchorY);
       } else {
@@ -275,7 +263,6 @@
         let envLeft, envRight, envTop, envBottom, anchorX, anchorY;
 
         if (dir === 'left') {
-          // 向左展开引流区
           envLeft = node.left - apronW;
           envRight = node.left + node.width * 0.7;
           envTop = node.top;
@@ -284,7 +271,6 @@
           anchorY = node.top + (node.height / 2);
           if (cursorCanvasY < envTop || cursorCanvasY > envBottom) continue;
         } else if (dir === 'bottom') {
-          // 向下展开引流区
           envLeft = node.left;
           envRight = node.left + node.width;
           envTop = node.top + node.height * 0.3;
@@ -293,7 +279,6 @@
           anchorY = node.top + node.height;
           if (cursorCanvasX < envLeft || cursorCanvasX > envRight) continue;
         } else {
-          // 向右展开引流区 (默认)
           envLeft = node.left + node.width * 0.3;
           envRight = node.left + node.width + apronW;
           envTop = node.top;
@@ -331,7 +316,6 @@
       return bestCandidate;
     }
 
-    // 递归获取节点及其子树的最低物理底沿
     getNodeSubtreeBottom(node) {
       let maxBottom = node.top + node.height;
       if (Array.isArray(node.children) && node.children.length > 0) {
@@ -342,7 +326,6 @@
       return maxBottom;
     }
 
-    // 递归获取节点及其子树的最高物理顶沿
     getNodeSubtreeTop(node) {
       let minTop = node.top;
       if (Array.isArray(node.children) && node.children.length > 0) {
@@ -353,7 +336,7 @@
       return minTop;
     }
 
-    // 检测当前是否命中兄弟节点之间的物理间隙插槽 (基于画布局部坐标，拥有物理通道垄断权)
+    // 检测当前是否命中兄弟节点之间的物理间隙插槽
     detectSiblingGutterSlot(candidates, cursorCanvasX, cursorCanvasY) {
       const parentMap = new Map();
       candidates.forEach((node) => {
@@ -383,7 +366,7 @@
             }
           }
 
-          // 2. 两个相邻兄弟节点之间的物理缝隙槽 (通道垄断：覆盖完整净间距与全卡片横向跨度)
+          // 2. 两个相邻兄弟节点之间的物理缝隙槽
           if (i < siblings.length - 1) {
             const next = siblings[i + 1];
             const gapTop = current.top + current.height;
@@ -392,7 +375,6 @@
             const slotTop = gapTop - 6;
             const slotBottom = gapBottom + 6;
             const slotLeft = Math.min(current.left, next.left) - 20;
-            // 严格截止于卡片右边缘，不向右侵入子级磁吸引流区
             const slotRight = Math.max(current.left + current.width, next.left + next.width);
 
             if (cursorCanvasY >= slotTop && cursorCanvasY <= slotBottom && cursorCanvasX >= slotLeft && cursorCanvasX <= slotRight) {
@@ -417,14 +399,13 @@
       return null;
     }
 
-    // 激活并渲染磁吸状态 (在统一 SVG Canvas 坐标空间中绘制)
+    // 激活并渲染磁吸状态
     applyMagneticSnap(targetParent, cloneAnchorX, cloneAnchorY) {
       this.activeTargetNode = targetParent;
       this.drag.overlapNode = targetParent;
       this.drag.prevNode = null;
       this.drag.nextNode = null;
 
-      // 隐藏原生多余的矩形占位符与连线
       if (this.drag.placeholder) {
         this.drag.placeholder.size(0, 0);
       }
@@ -432,7 +413,6 @@
         this.drag.placeHolderLine.hide();
       }
 
-      // 计算飞书标准直角阶梯折线 (智能自适应向右、向左、向下对接)
       const dir = this.getNodeDirection(targetParent);
       let x1, y1;
       if (dir === 'left') {
@@ -466,7 +446,6 @@
           pathData = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`;
         }
       } else {
-        // right (向右展开标准阶梯折线)
         if (x2 <= x1 + 4) {
           pathData = `M ${x1} ${y1} L ${x2} ${y2}`;
         } else if (Math.abs(y2 - y1) < 2) {
@@ -490,14 +469,12 @@
 
       this.magneticLine.plot(pathData).show();
 
-      // 候选父节点吸附高亮轮廓更新 (圆角 6px 与主题卡片严格呼应)
       this.parentHighlight
         .size(targetParent.width + 8, targetParent.height + 6)
         .move(targetParent.left - 4, targetParent.top - 3)
         .show();
     }
 
-    // 复位与清理磁吸状态
     cleanup() {
       this.activeTargetNode = null;
       if (this.magneticLine) {
@@ -515,6 +492,5 @@
     }
   }
 
-  // 挂载至全局命名空间
-  global.FeishuDragEnhancer = FeishuDragEnhancer;
+  global.MindMapDragEnhancer = MindMapDragEnhancer;
 })(typeof window !== 'undefined' ? window : this);

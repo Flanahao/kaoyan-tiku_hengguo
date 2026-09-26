@@ -1,13 +1,13 @@
 /**
- * 飞书思维笔记大纲视图专属样式 (Feishu Outliner Design System)
+ * 思维笔记大纲视图专属样式 (MindMap Outliner Design System)
  * 1. 沉浸式纸张居中排版 (Paper Canvas)
  * 2. 纯净圆点手柄与级联竖向导向线 (Bullet & Guide Lines)
  * 3. 悬浮双向视图切换胶囊 (Dual-View Switcher)
- * 4. 全程零表情符号
  */
 
-/* 大纲视图容器 (全白画布，彻底移除灰底与浮窗大框框) */
-#outlinerContainer {
+/* 大纲视图容器 */
+#outlinerContainer,
+#cognitiveOutlinerContainer {
   position: absolute;
   top: 0;
   left: 0;
@@ -17,35 +17,42 @@
   overflow-x: hidden;
   background-color: #ffffff;
   z-index: 50;
-  display: none; /* 默认激活导图视图，点击切换后设为 block */
+  display: none; /* 默认激活导图视图，切换后设为 block */
   -webkit-overflow-scrolling: touch;
 }
 
-#outlinerContainer::-webkit-scrollbar {
+#outlinerContainer::-webkit-scrollbar,
+#cognitiveOutlinerContainer::-webkit-scrollbar {
   width: 6px;
 }
 
-#outlinerContainer::-webkit-scrollbar-thumb {
+#outlinerContainer::-webkit-scrollbar-thumb,
+#cognitiveOutlinerContainer::-webkit-scrollbar-thumb {
   background-color: rgba(31, 35, 41, 0.15);
   border-radius: 3px;
 }
 
-#outlinerContainer::-webkit-scrollbar-track {
+#outlinerContainer::-webkit-scrollbar-track,
+#cognitiveOutlinerContainer::-webkit-scrollbar-track {
   background: transparent;
 }
 
-#outlinerContainer.active {
+#outlinerContainer.active,
+#cognitiveOutlinerContainer.active {
   display: block;
 }
 
 /* 当处于大纲模式时，隐藏思维导图专属的悬浮工具栏、缩放条与提示卡片 */
 body.view-mode-outline .floating-toolbar,
 body.view-mode-outline .floating-viewport-bar,
-body.view-mode-outline .shortcut-tips-card {
+body.view-mode-outline .shortcut-tips-card,
+.view-mode-outline .floating-toolbar,
+.view-mode-outline .floating-viewport-bar,
+.view-mode-outline .shortcut-tips-card {
   display: none !important;
 }
 
-/* 沉浸式白色文档正文区域 (彻底移除浮动卡片大框框与灯笼感，直呈纯净白底排版) */
+/* 沉浸式白色文档正文区域 */
 .outliner-paper {
   max-width: 880px;
   min-height: 100vh;
@@ -168,7 +175,7 @@ body.view-mode-outline .shortcut-tips-card {
   transform: rotate(-90deg);
 }
 
-/* 双态文本区域容器与防跳动 (Anti-Layout Shift) 机制 */
+/* 双态文本区域容器 */
 .outliner-text-wrap {
   flex: 1;
   min-height: 26px;
@@ -193,7 +200,7 @@ body.view-mode-outline .shortcut-tips-card {
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 2px;
+  gap: 4px;
 }
 
 .outliner-display-view:empty::before {
@@ -337,7 +344,7 @@ body.view-mode-outline .shortcut-tips-card {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   大纲实时悬浮渲染胶囊 (编辑行输入含公式/Markdown时展示富文本实时预览)
+   大纲实时悬浮渲染胶囊
    ───────────────────────────────────────────────────────────── */
 .outliner-preview-capsule {
   position: fixed;
@@ -373,18 +380,18 @@ body.view-mode-outline .shortcut-tips-card {
 }
 
 /* 大纲 7 色高亮标记 */
-.outliner-row.feishu-highlight-red .outliner-bullet { background: #ff4d4f !important; }
-.outliner-row.feishu-highlight-yellow .outliner-bullet { background: #faad14 !important; }
-.outliner-row.feishu-highlight-purple .outliner-bullet { background: #722ed1 !important; }
-.outliner-row.feishu-highlight-blue .outliner-bullet { background: #1677ff !important; }
-.outliner-row.feishu-highlight-cyan .outliner-bullet { background: #13c2c2 !important; }
-.outliner-row.feishu-highlight-orange .outliner-bullet { background: #fa541c !important; }
-.outliner-row.feishu-highlight-green .outliner-bullet { background: #52c41a !important; }
+.outliner-row.mm-highlight-red .outliner-bullet { background: #ff4d4f !important; }
+.outliner-row.mm-highlight-yellow .outliner-bullet { background: #faad14 !important; }
+.outliner-row.mm-highlight-purple .outliner-bullet { background: #722ed1 !important; }
+.outliner-row.mm-highlight-blue .outliner-bullet { background: #1677ff !important; }
+.outliner-row.mm-highlight-cyan .outliner-bullet { background: #13c2c2 !important; }
+.outliner-row.mm-highlight-orange .outliner-bullet { background: #fa541c !important; }
+.outliner-row.mm-highlight-green .outliner-bullet { background: #52c41a !important; }
 
-.outliner-row.feishu-highlight-red { background: #ffece8; border-radius: 4px; }
-.outliner-row.feishu-highlight-yellow { background: #fffbe6; border-radius: 4px; }
-.outliner-row.feishu-highlight-purple { background: #f9f0ff; border-radius: 4px; }
-.outliner-row.feishu-highlight-blue { background: #e6f4ff; border-radius: 4px; }
-.outliner-row.feishu-highlight-cyan { background: #e6fffb; border-radius: 4px; }
-.outliner-row.feishu-highlight-orange { background: #fff2e8; border-radius: 4px; }
-.outliner-row.feishu-highlight-green { background: #f6ffed; border-radius: 4px; }
+.outliner-row.mm-highlight-red { background: #ffece8; border-radius: 4px; }
+.outliner-row.mm-highlight-yellow { background: #fffbe6; border-radius: 4px; }
+.outliner-row.mm-highlight-purple { background: #f9f0ff; border-radius: 4px; }
+.outliner-row.mm-highlight-blue { background: #e6f4ff; border-radius: 4px; }
+.outliner-row.mm-highlight-cyan { background: #e6fffb; border-radius: 4px; }
+.outliner-row.mm-highlight-orange { background: #fff2e8; border-radius: 4px; }
+.outliner-row.mm-highlight-green { background: #f6ffed; border-radius: 4px; }

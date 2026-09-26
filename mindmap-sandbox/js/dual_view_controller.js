@@ -1,11 +1,10 @@
 /**
- * 飞书双向视图控制器 (DualViewController)
+ * 双向视图控制器 (DualViewController)
  * 职责：
- * 1. 挂载并渲染飞书同款双向切换胶囊控件 [ 大纲 | 导图 ]
+ * 1. 挂载并渲染双向切换胶囊控件 [ 大纲 | 导图 ]
  * 2. 状态机管理：导图模式 (MindMap) 与大纲模式 (Outliner) 之间平滑无缝切换
  * 3. 双向数据模型全保真同步 (MindMap <-> Outliner 数据源双向无损互通)
- * 4. 键盘全局快捷键支持 (Ctrl + / 快速在两重视图间切换)
- * 5. 全程零表情符号规范
+ * 4. 键盘全局快捷键支持 (M 键快速在两重视图间切换，支持作用域隔离)
  */
 (function (global) {
   'use strict';
@@ -16,14 +15,18 @@
         throw new Error('[DualViewController] 必须传入有效的 MindMap 实例');
       }
       if (!outliner) {
-        throw new Error('[DualViewController] 必须传入有效的 FeishuOutliner 实例');
+        throw new Error('[DualViewController] 必须传入有效的 MindMapOutliner 实例');
       }
 
       this.mindMap = mindMap;
       this.outliner = outliner;
       this.options = Object.assign({
         defaultView: 'mindmap', // 'mindmap' | 'outline'
-        container: document.body
+        container: document.body,
+        mindMapContainer: null,
+        outlinerContainer: null,
+        isActiveCheck: null,
+        mountSwitcher: true
       }, options);
 
       this.currentView = this.options.defaultView;
@@ -36,10 +39,27 @@
       this.syncMindMapToOutliner();
     }
 
+    isActive() {
+      if (typeof this.options.isActiveCheck === 'function') {
+        return !!this.options.isActiveCheck();
+      }
+      return true;
+    }
+
     // 初始化切换控件 DOM
     initDom() {
+      this.mindMapContainer = this.options.mindMapContainer || document.getElementById('mindMapContainer');
+      this.outlinerContainer = this.options.outlinerContainer || document.getElementById('outlinerContainer');
+
+      if (!this.options.mountSwitcher) {
+        this.switcherEl = null;
+        this.btnOutline = null;
+        this.btnMindMap = null;
+        return;
+      }
+
       // 避免重复挂载
-      const existing = document.querySelector('.dual-view-switcher');
+      const existing = this.options.container.querySelector('.dual-view-switcher');
       if (existing) {
         existing.remove();
       }
@@ -74,32 +94,35 @@
       this.switcherEl = switcherEl;
       this.btnOutline = switcherEl.querySelector('[data-view="outline"]');
       this.btnMindMap = switcherEl.querySelector('[data-view="mindmap"]');
-      this.mindMapContainer = document.getElementById('mindMapContainer');
-      this.outlinerContainer = document.getElementById('outlinerContainer');
     }
 
     // 绑定切换交互
     bindEvents() {
-      // 点击切换
-      this.btnOutline.addEventListener('click', () => {
-        this.switchView('outline');
-      });
+      if (this.btnOutline) {
+        this.btnOutline.addEventListener('click', () => {
+          this.switchView('outline');
+        });
+      }
 
-      this.btnMindMap.addEventListener('click', () => {
-        this.switchView('mindmap');
-      });
+      if (this.btnMindMap) {
+        this.btnMindMap.addEventListener('click', () => {
+          this.switchView('mindmap');
+        });
+      }
 
       // 快捷键 M 在非编辑态切换两种模式
       window.addEventListener('keydown', (e) => {
+        if (!this.isActive()) return;
         if ((e.key === 'm' || e.key === 'M') && !e.ctrlKey && !e.metaKey && !e.altKey) {
           const el = document.activeElement;
           const isTyping = el && (
-            el.tagName === 'INPUT' || 
-            el.tagName === 'TEXTAREA' || 
+            el.tagName === 'INPUT' ||
+            el.tagName === 'TEXTAREA' ||
             (el.isContentEditable && (el.offsetParent !== null || el.style.display !== 'none'))
           );
           const isOutlinerFocused = !!(this.outliner && this.outliner.focusedUid);
-          const isNodeEditorOpen = !!(window._feishuNodeEditorInstance && window._feishuNodeEditorInstance.isEditing);
+          const editor = this.mindMap.mindMapNodeEditor || window._mindMapNodeEditorInstance;
+          const isNodeEditorOpen = !!(editor && editor.isEditing);
           if (!isTyping && !isOutlinerFocused && !isNodeEditorOpen) {
             e.preventDefault();
             e.stopImmediatePropagation();
@@ -125,12 +148,16 @@
           this.outlinerContainer.classList.add('active');
           this.outlinerContainer.scrollTop = 0;
         }
-        document.body.classList.add('view-mode-outline');
-        document.body.classList.remove('view-mode-mindmap');
+        this.options.container.classList.add('view-mode-outline');
+        this.options.container.classList.remove('view-mode-mindmap');
+        if (this.options.container === document.body) {
+          document.body.classList.add('view-mode-outline');
+          document.body.classList.remove('view-mode-mindmap');
+        }
 
         // 3. 按钮高亮状态
-        this.btnOutline.classList.add('active');
-        this.btnMindMap.classList.remove('active');
+        if (this.btnOutline) this.btnOutline.classList.add('active');
+        if (this.btnMindMap) this.btnMindMap.classList.remove('active');
 
         this.currentView = 'outline';
         this.emit('view_change', 'outline');
@@ -142,8 +169,12 @@
         if (this.outlinerContainer) {
           this.outlinerContainer.classList.remove('active');
         }
-        document.body.classList.remove('view-mode-outline');
-        document.body.classList.add('view-mode-mindmap');
+        this.options.container.classList.remove('view-mode-outline');
+        this.options.container.classList.add('view-mode-mindmap');
+        if (this.options.container === document.body) {
+          document.body.classList.remove('view-mode-outline');
+          document.body.classList.add('view-mode-mindmap');
+        }
 
         // 2. 从大纲同步最新树数据到导图
         this.syncOutlinerToMindMap();
@@ -153,8 +184,8 @@
         this.mindMap.view.reset();
 
         // 4. 按钮高亮状态
-        this.btnMindMap.classList.add('active');
-        this.btnOutline.classList.remove('active');
+        if (this.btnMindMap) this.btnMindMap.classList.add('active');
+        if (this.btnOutline) this.btnOutline.classList.remove('active');
 
         this.currentView = 'mindmap';
         this.emit('view_change', 'mindmap');
@@ -164,6 +195,14 @@
     // 在两种视图间轮流切换
     toggleView() {
       this.switchView(this.currentView === 'mindmap' ? 'outline' : 'mindmap');
+    }
+
+    getMode() {
+      return this.currentView;
+    }
+
+    getView() {
+      return this.currentView;
     }
 
     // 导图 -> 大纲 数据同步

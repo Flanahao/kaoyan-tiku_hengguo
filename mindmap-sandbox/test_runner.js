@@ -736,10 +736,10 @@ async function run() {
     }
     console.log(`[PASS] 测试 17: 外部数据结构导入 (setData) 成功，新知识架构已完整呈现 (根="${importTest.newRootTitle}", 分支数=${importTest.branchCount})`);
 
-    console.log('\n--- 开始执行 Phase 6 飞书风格视觉主题与磁吸拖拽交互专项断言项 ---');
+    console.log('\n--- 开始执行 Phase 6 导图风格视觉主题与磁吸拖拽交互专项断言项 ---');
 
-    // 测试 18: 飞书视觉主题规范验证 (居中直角折线、二级浅灰底色卡片与品牌蓝连线)
-    const feishuThemeTest = await evaluate(ws, `
+    // 测试 18: 导图视觉主题规范验证 (居中直角折线、二级浅灰底色卡片与品牌蓝连线)
+    const modernThemeTest = await evaluate(ws, `
       (function() {
         const mm = window._mindMapInstance;
         const themeConfig = mm.getThemeConfig();
@@ -765,24 +765,24 @@ async function run() {
       })()
     `);
 
-    if (feishuThemeTest.currentTheme !== 'feishu') {
-      throw new Error(`当前生效主题非 feishu: "${feishuThemeTest.currentTheme}"`);
+    if (modernThemeTest.currentTheme !== 'mindmap_modern') {
+      throw new Error(`当前生效主题非 mindmap_modern: "${modernThemeTest.currentTheme}"`);
     }
-    if (feishuThemeTest.lineStyle !== 'straight' || feishuThemeTest.lineColor !== '#3370ff') {
-      throw new Error(`飞书分支折线样式不符: style=${feishuThemeTest.lineStyle}, color=${feishuThemeTest.lineColor}`);
+    if (modernThemeTest.lineStyle !== 'straight' || modernThemeTest.lineColor !== '#3370ff') {
+      throw new Error(`导图分支折线样式不符: style=${modernThemeTest.lineStyle}, color=${modernThemeTest.lineColor}`);
     }
-    if (feishuThemeTest.lineRadius !== 8 || feishuThemeTest.nodeUseLineStyle !== false) {
-      throw new Error(`飞书圆角半径或居中连线配置不符: radius=${feishuThemeTest.lineRadius}, nodeUseLineStyle=${feishuThemeTest.nodeUseLineStyle}`);
+    if (modernThemeTest.lineRadius !== 8 || modernThemeTest.nodeUseLineStyle !== false) {
+      throw new Error(`导图圆角半径或居中连线配置不符: radius=${modernThemeTest.lineRadius}, nodeUseLineStyle=${modernThemeTest.nodeUseLineStyle}`);
     }
-    if (feishuThemeTest.secondFill !== '#eff0f1') {
-      throw new Error(`飞书二级节点专属浅灰底色不符: ${feishuThemeTest.secondFill}`);
+    if (modernThemeTest.secondFill !== '#eff0f1') {
+      throw new Error(`导图二级节点专属浅灰底色不符: ${modernThemeTest.secondFill}`);
     }
-    console.log(`[PASS] 测试 18: 飞书视觉主题生效，直角折线=${feishuThemeTest.lineStyle} (圆角半径=${feishuThemeTest.lineRadius}px)，下划线模式=${feishuThemeTest.nodeUseLineStyle} (精准垂直居中对接)，二级浅灰底色=${feishuThemeTest.secondFill}，品牌蓝=${feishuThemeTest.lineColor}`);
+    console.log(`[PASS] 测试 18: 导图视觉主题生效，直角折线=${modernThemeTest.lineStyle} (圆角半径=${modernThemeTest.lineRadius}px)，下划线模式=${modernThemeTest.nodeUseLineStyle} (精准垂直居中对接)，二级浅灰底色=${modernThemeTest.secondFill}，品牌蓝=${modernThemeTest.lineColor}`);
 
-    // 测试 19: 飞书拖拽增强器实例挂载校验
+    // 测试 19: 导图拖拽增强器实例挂载校验
     const enhancerInitTest = await evaluate(ws, `
       (function() {
-        const enhancer = window._feishuDragEnhancerInstance;
+        const enhancer = window._mindMapDragEnhancerInstance;
         return {
           hasEnhancer: Boolean(enhancer),
           hasLine: Boolean(enhancer && enhancer.magneticLine),
@@ -794,15 +794,15 @@ async function run() {
     `);
 
     if (!enhancerInitTest.hasEnhancer || !enhancerInitTest.hasLine || !enhancerInitTest.hasHighlight) {
-      throw new Error('FeishuDragEnhancer 实例或辅助 SVG 元素未就绪');
+      throw new Error('MindMapDragEnhancer 实例或辅助 SVG 元素未就绪');
     }
-    console.log(`[PASS] 测试 19: 飞书拖拽增强器 (FeishuDragEnhancer) 已挂载，磁吸阈值就绪，线色=${enhancerInitTest.lineColor}`);
+    console.log(`[PASS] 测试 19: 导图拖拽增强器 (MindMapDragEnhancer) 已挂载，磁吸阈值就绪，线色=${enhancerInitTest.lineColor}`);
 
     // 测试 20: 右向延展包络面磁吸捕获与直接重叠零惩罚验证
     const magneticSnapTest = await evaluate(ws, `
       new Promise((resolve) => {
         const mm = window._mindMapInstance;
-        const enhancer = window._feishuDragEnhancerInstance;
+        const enhancer = window._mindMapDragEnhancerInstance;
         const drag = mm.drag;
 
         // 重新灌入默认导图以便定位章节节点
@@ -877,7 +877,7 @@ async function run() {
     await evaluate(ws, `
       (function() {
         const mm = window._mindMapInstance;
-        const enhancer = window._feishuDragEnhancerInstance;
+        const enhancer = window._mindMapDragEnhancerInstance;
         const drag = mm.drag;
         const root = mm.renderer.root;
         const ch2 = root.children[1];
@@ -899,17 +899,17 @@ async function run() {
     `);
     const snapScreenshot = await sendCDP(ws, 'Page.captureScreenshot', { format: 'png' });
     const snapScreenshotBuffer = Buffer.from(snapScreenshot.data, 'base64');
-    fs.writeFileSync(path.join(__dirname, 'feishu_magnetic_snap_preview.png'), snapScreenshotBuffer);
+    fs.writeFileSync(path.join(__dirname, 'mindmap_magnetic_snap_preview.png'), snapScreenshotBuffer);
     if (fs.existsSync(BRAIN_DIR)) {
-      fs.writeFileSync(path.join(BRAIN_DIR, 'feishu_magnetic_snap_preview.png'), snapScreenshotBuffer);
+      fs.writeFileSync(path.join(BRAIN_DIR, 'mindmap_magnetic_snap_preview.png'), snapScreenshotBuffer);
     }
-    console.log('[Screenshot] 飞书磁吸拖拽动态截图已生成: mindmap-sandbox/feishu_magnetic_snap_preview.png');
+    console.log('[Screenshot] 导图磁吸拖拽动态截图已生成: mindmap-sandbox/mindmap_magnetic_snap_preview.png');
 
     // 测试 21: 超出阈值自动断开 (Detach)
     const magneticDetachTest = await evaluate(ws, `
       (function() {
         const mm = window._mindMapInstance;
-        const enhancer = window._feishuDragEnhancerInstance;
+        const enhancer = window._mindMapDragEnhancerInstance;
         const drag = mm.drag;
         const root = mm.renderer.root;
         const ch2 = root.children[1];
@@ -942,7 +942,7 @@ async function run() {
     const siblingPriorityTest = await evaluate(ws, `
       (function() {
         const mm = window._mindMapInstance;
-        const enhancer = window._feishuDragEnhancerInstance;
+        const enhancer = window._mindMapDragEnhancerInstance;
         const drag = mm.drag;
         const root = mm.renderer.root;
         const ch1 = root.children[0];
@@ -1028,7 +1028,7 @@ async function run() {
     const transitionTest = await evaluate(ws, `
       (function() {
         const mm = window._mindMapInstance;
-        const enhancer = window._feishuDragEnhancerInstance;
+        const enhancer = window._mindMapDragEnhancerInstance;
         const drag = mm.drag;
         const root = mm.renderer.root;
         const ch1 = root.children[0];
@@ -1134,7 +1134,7 @@ async function run() {
     const panZoomMagneticTest = await evaluate(ws, `
       (function() {
         const mm = window._mindMapInstance;
-        const enhancer = window._feishuDragEnhancerInstance;
+        const enhancer = window._mindMapDragEnhancerInstance;
         const drag = mm.drag;
         const root = mm.renderer.root;
         const ch2 = root.children[1]; // 第二章
@@ -1202,7 +1202,7 @@ async function run() {
     const farFieldDetachmentTest = await evaluate(ws, `
       (function() {
         const mm = window._mindMapInstance;
-        const enhancer = window._feishuDragEnhancerInstance;
+        const enhancer = window._mindMapDragEnhancerInstance;
         const drag = mm.drag;
         const root = mm.renderer.root;
         const ch3 = root.children[2];
@@ -1257,7 +1257,7 @@ async function run() {
     const multiHierarchyTest = await evaluate(ws, `
       (function() {
         const mm = window._mindMapInstance;
-        const enhancer = window._feishuDragEnhancerInstance;
+        const enhancer = window._mindMapDragEnhancerInstance;
         const drag = mm.drag;
         const root = mm.renderer.root;
         const ch1 = root.children[0];
@@ -1309,7 +1309,7 @@ async function run() {
     const hysteresisTest = await evaluate(ws, `
       (function() {
         const mm = window._mindMapInstance;
-        const enhancer = window._feishuDragEnhancerInstance;
+        const enhancer = window._mindMapDragEnhancerInstance;
         const drag = mm.drag;
         const root = mm.renderer.root;
         const ch1 = root.children[0];
@@ -1371,9 +1371,9 @@ async function run() {
     }
     console.log('[PASS] 测试 28: 迟滞防抖动态阈值验证通过 (50px 捕获 -> 110px 稳定维系 -> 160px 干净断开)');
 
-    console.log('\n--- 开始执行 Phase 7 飞书大纲笔记与双向联动专项断言项 ---');
+    console.log('\n--- 开始执行 Phase 7 导图大纲笔记与双向联动专项断言项 ---');
 
-    // 测试 29: 飞书大纲视图挂载与 DOM 结构校验
+    // 测试 29: 导图大纲视图挂载与 DOM 结构校验
     const outlinerMountTest = await evaluate(ws, `
       (function() {
         const controller = window._dualViewControllerInstance;
@@ -1419,7 +1419,7 @@ async function run() {
     if (!outlinerMountTest.hasPaper || outlinerMountTest.nodeCount === 0) {
       throw new Error(`大纲纸张或节点渲染失败: nodeCount=${outlinerMountTest.nodeCount}`);
     }
-    console.log(`[PASS] 测试 29: 飞书大纲视图成功挂载，纸张居中渲染，标题="${outlinerMountTest.titleText}"，大纲行节点数=${outlinerMountTest.nodeCount}`);
+    console.log(`[PASS] 测试 29: 导图大纲视图成功挂载，纸张居中渲染，标题="${outlinerMountTest.titleText}"，大纲行节点数=${outlinerMountTest.nodeCount}`);
 
     // 测试 30: 大纲全键盘工作流 - Enter 键插入同级兄弟节点
     const outlinerEnterTest = await evaluate(ws, `
@@ -1562,7 +1562,7 @@ async function run() {
         // 在大纲中编辑聚焦的节点文本
         const focusedUid = outliner.focusedUid;
         const textEl = outliner.treeEl.querySelector('.outliner-text[data-uid="' + focusedUid + '"]');
-        const targetString = '飞书大纲双向联动验证节点_2026';
+        const targetString = '导图大纲双向联动验证节点_2026';
         textEl.textContent = targetString;
         textEl.dispatchEvent(new Event('input', { bubbles: true }));
 
@@ -1610,7 +1610,7 @@ async function run() {
     }
     console.log(`[PASS] 测试 34: 双向数据同步测试通过，大纲新编节点已无缝同步并在导图 SVG 节点中成功呈现: "${roundTripSyncTest.targetString}"`);
 
-    // 测试 35: 飞书大纲与思维导图视图双向切换
+    // 测试 35: 导图大纲与思维导图视图双向切换
     const viewSwitchTest = await evaluate(ws, `
       (function() {
         const controller = window._dualViewControllerInstance;
@@ -1635,7 +1635,7 @@ async function run() {
     if (viewSwitchTest.viewBefore !== 'mindmap' || viewSwitchTest.viewAfterFirst !== 'outline' || viewSwitchTest.viewAfterSecond !== 'mindmap') {
       throw new Error(`视图双向切换异常: ${JSON.stringify(viewSwitchTest)}`);
     }
-    console.log('[PASS] 测试 35: 飞书大纲与导图双向切换验证通过 (mindmap -> outline -> mindmap)');
+    console.log('[PASS] 测试 35: 导图大纲与导图双向切换验证通过 (mindmap -> outline -> mindmap)');
 
     // 测试 36: 大纲节点层级重排 (moveNodeRelative)
     const outlinerMoveTest = await evaluate(ws, `
@@ -1685,7 +1685,7 @@ async function run() {
             const katexElements = Array.from(fo.querySelectorAll('.katex'));
             const katexHtmlElements = Array.from(fo.querySelectorAll('.katex-html'));
             const fractions = Array.from(fo.querySelectorAll('.mfrac'));
-            const cardEl = fo.querySelector('.feishu-node-card');
+            const cardEl = fo.querySelector('.mm-node-card');
             
             resolve({
               hasCard: !!cardEl,
@@ -1711,12 +1711,12 @@ async function run() {
     }
     console.log(`[PASS] 测试 37: 导图节点 LaTeX 复杂公式排版通过 (KaTeX公式数=${latexRenderTest.katexCount}, 分式数=${latexRenderTest.fractionCount}, 节点尺寸=${Math.round(latexRenderTest.width)}x${Math.round(latexRenderTest.height)})`);
 
-    // 测试 38: 导图原位编辑与实时悬浮预览胶囊 (FeishuNodeEditor + Live Preview Capsule)
+    // 测试 38: 导图原位编辑与实时悬浮预览胶囊 (MindMapNodeEditor + Live Preview Capsule)
     await evaluate(ws, `
       (function() {
         const mm = window._mindMapInstance;
         mm.view.fit();
-        const editor = window._feishuNodeEditorInstance;
+        const editor = window._mindMapNodeEditorInstance;
         const root = mm.renderer.root;
         const targetNode = root.children[0].children[0];
 
@@ -1733,16 +1733,16 @@ async function run() {
     await sleep(250);
     const editorScreenshot = await sendCDP(ws, 'Page.captureScreenshot', { format: 'png' });
     const editorScreenshotBuffer = Buffer.from(editorScreenshot.data, 'base64');
-    fs.writeFileSync(path.join(__dirname, 'feishu_formula_editor_preview.png'), editorScreenshotBuffer);
+    fs.writeFileSync(path.join(__dirname, 'mindmap_formula_editor_preview.png'), editorScreenshotBuffer);
     if (fs.existsSync(BRAIN_DIR)) {
-      fs.writeFileSync(path.join(BRAIN_DIR, 'feishu_formula_editor_preview.png'), editorScreenshotBuffer);
+      fs.writeFileSync(path.join(BRAIN_DIR, 'mindmap_formula_editor_preview.png'), editorScreenshotBuffer);
     }
-    console.log('[Screenshot] 飞书公式原位编辑与实时悬浮预览胶囊截图已生成: mindmap-sandbox/feishu_formula_editor_preview.png');
+    console.log('[Screenshot] 导图公式原位编辑与实时悬浮预览胶囊截图已生成: mindmap-sandbox/mindmap_formula_editor_preview.png');
 
     const editorCapsuleTest = await evaluate(ws, `
       (function() {
         const mm = window._mindMapInstance;
-        const editor = window._feishuNodeEditorInstance;
+        const editor = window._mindMapNodeEditorInstance;
         const root = mm.renderer.root;
         const targetNode = root.children[0].children[0];
 
@@ -1772,7 +1772,7 @@ async function run() {
     }
     console.log(`[PASS] 测试 38: 导图原位编辑与实时悬浮预览胶囊测试通过 (胶囊实时 KaTeX=${editorCapsuleTest.updatedCapsuleKatex}, 提交后优雅隐藏，节点文本="${editorCapsuleTest.nodeTextAfterCommit}")`);
 
-    // 测试 39: 飞书大纲双态切换与防跳动 (Outliner Dual-State Toggle & Anti-Jitter)
+    // 测试 39: 导图大纲双态切换与防跳动 (Outliner Dual-State Toggle & Anti-Jitter)
     const outlinerDualStateTest = await evaluate(ws, `
       (function() {
         const controller = window._dualViewControllerInstance;
@@ -1831,15 +1831,15 @@ async function run() {
     `);
 
     if (!outlinerDualStateTest.isDisplayVisibleBefore || !outlinerDualStateTest.isInputVisibleAfterClick || !outlinerDualStateTest.isDisplayVisibleAfterCommit || outlinerDualStateTest.katexCountInDisplay === 0) {
-      throw new Error(`飞书大纲双态切换与防跳动异常: ${JSON.stringify(outlinerDualStateTest)}`);
+      throw new Error(`导图大纲双态切换与防跳动异常: ${JSON.stringify(outlinerDualStateTest)}`);
     }
-    console.log(`[PASS] 测试 39: 飞书大纲双态切换与防跳动通过 (浏览态呈现 KaTeX=${outlinerDualStateTest.katexCountInDisplay} -> 点击平滑转源码态 -> 提交切回浏览态)`);
+    console.log(`[PASS] 测试 39: 导图大纲双态切换与防跳动通过 (浏览态呈现 KaTeX=${outlinerDualStateTest.katexCountInDisplay} -> 点击平滑转源码态 -> 提交切回浏览态)`);
 
-    // 测试 40: 包含大公式节点时的飞书磁吸吸附几何稳定性
+    // 测试 40: 包含大公式节点时的导图磁吸吸附几何稳定性
     const formulaSnapTest = await evaluate(ws, `
       (function() {
         const mm = window._mindMapInstance;
-        const dragEnhancer = window._feishuDragEnhancerInstance;
+        const dragEnhancer = window._mindMapDragEnhancerInstance;
         const drag = mm.drag;
         const root = mm.renderer.root;
         if (!root || !root.children || !root.children.length) {
@@ -1884,34 +1884,34 @@ async function run() {
     if (!formulaSnapTest.isChildSnap || !formulaSnapTest.lineVisible) {
       throw new Error(`复杂公式节点磁吸判定失败: ${JSON.stringify(formulaSnapTest)}`);
     }
-    console.log(`[PASS] 测试 40: 包含大公式节点时的飞书磁吸吸附几何稳定性测试通过 (节点尺寸=${Math.round(formulaSnapTest.formulaNodeWidth)}x${Math.round(formulaSnapTest.formulaNodeHeight)}, 动态蓝线精准贴合)`);
+    console.log(`[PASS] 测试 40: 包含大公式节点时的导图磁吸吸附几何稳定性测试通过 (节点尺寸=${Math.round(formulaSnapTest.formulaNodeWidth)}x${Math.round(formulaSnapTest.formulaNodeHeight)}, 动态蓝线精准贴合)`);
 
-    // --- 开始执行 Phase 9 缺陷修复与飞书第二阶段核心交互专项断言项 ---
-    console.log('\n--- 开始执行 Phase 9 缺陷修复与飞书第二阶段核心交互专项断言项 ---');
+    // --- 开始执行 Phase 9 缺陷修复与导图第二阶段核心交互专项断言项 ---
+    console.log('\n--- 开始执行 Phase 9 缺陷修复与导图第二阶段核心交互专项断言项 ---');
 
     // 切回导图模式
     await evaluate(ws, `window._dualViewControllerInstance.switchView('mindmap')`);
     await sleep(200);
 
-    // 测试 41: 导图原位编辑双重方框重叠根除验证 (is-feishu-editing 状态与底层 hoverNode/foreignObject 隐藏)
+    // 测试 41: 导图原位编辑双重方框重叠根除验证 (is-mm-editing 状态与底层 hoverNode/foreignObject 隐藏)
     const boxOverlapTest = await evaluate(ws, `
       (function() {
         const mm = window._mindMapInstance;
-        const editor = window._feishuNodeEditorInstance;
+        const editor = window._mindMapNodeEditorInstance;
         const root = mm.renderer.root;
         const targetNode = root.children[0];
 
         // 唤起编辑
         editor.show(targetNode);
 
-        const hasEditingClass = targetNode.group.hasClass('is-feishu-editing');
+        const hasEditingClass = targetNode.group.hasClass('is-mm-editing');
         const hoverNodeHidden = targetNode.hoverNode ? (targetNode.hoverNode.node.style.display === 'none' || window.getComputedStyle(targetNode.hoverNode.node).display === 'none') : true;
         const fo = targetNode.group.findOne('foreignObject');
         const foOpacity = fo ? window.getComputedStyle(fo.node).opacity : '1';
 
         // 提交编辑并检查复原
         editor.commitAndHide();
-        const hasEditingClassAfter = targetNode.group.hasClass('is-feishu-editing');
+        const hasEditingClassAfter = targetNode.group.hasClass('is-mm-editing');
 
         return {
           hasEditingClass,
@@ -1925,12 +1925,12 @@ async function run() {
     if (!boxOverlapTest.hasEditingClass || !boxOverlapTest.hoverNodeHidden || boxOverlapTest.foOpacity !== '0' || boxOverlapTest.hasEditingClassAfter) {
       throw new Error(`导图编辑方框重叠根除断言失败: ${JSON.stringify(boxOverlapTest)}`);
     }
-    console.log('[PASS] 测试 41: 导图编辑方框重叠根除验证通过 (编辑中注入 is-feishu-editing，底层 hoverNode 隐藏，foreignObject 不透明度置 0，提交后复原)');
+    console.log('[PASS] 测试 41: 导图编辑方框重叠根除验证通过 (编辑中注入 is-mm-editing，底层 hoverNode 隐藏，foreignObject 不透明度置 0，提交后复原)');
 
     // 测试 42: 预览胶囊冗余标题文字彻底剔除验证
     const capsuleBadgeTest = await evaluate(ws, `
       (function() {
-        const editor = window._feishuNodeEditorInstance;
+        const editor = window._mindMapNodeEditorInstance;
         const hasHeader = !!editor.capsule.querySelector('.capsule-header');
         const hasBadge = !!editor.capsule.querySelector('.capsule-badge');
         const hasContent = !!editor.capsule.querySelector('.capsule-content');
@@ -1985,16 +1985,16 @@ async function run() {
     }
     console.log(`[PASS] 测试 43: 大纲模式公式悬浮预览胶囊恢复完备 (输入期胶囊正常弹窗并渲染 KaTeX=${outlinerCapsuleTest.katexInCapsule}，提交后在行内直接渲染 KaTeX=${outlinerCapsuleTest.katexInDisplay}，胶囊自动隐退)`);
 
-    // 测试 44: 飞书底部固定深色工具条挂载与按钮可用性
+    // 测试 44: 导图底部固定深色工具条挂载与按钮可用性
     const bottomToolbarTest = await evaluate(ws, `
       (function() {
-        const toolbar = document.querySelector('.feishu-bottom-toolbar');
+        const toolbar = document.querySelector('.mm-bottom-toolbar');
         if (!toolbar) return { error: '未找到底部工具条' };
         const style = window.getComputedStyle(toolbar);
         const isFixed = style.position === 'fixed';
         const isBottom = parseInt(style.bottom) >= 15;
         const btnCount = toolbar.querySelectorAll('.bar-btn').length;
-        const colorPopover = toolbar.querySelector('.feishu-color-popover');
+        const colorPopover = toolbar.querySelector('.mm-color-popover');
         const colorDotCount = colorPopover ? colorPopover.querySelectorAll('.color-dot').length : 0;
 
         return {
@@ -2009,7 +2009,7 @@ async function run() {
     if (!bottomToolbarTest.isFixed || !bottomToolbarTest.isBottom || bottomToolbarTest.btnCount !== 4 || bottomToolbarTest.colorDotCount !== 8) {
       throw new Error(`底部固定工具条断言失败: ${JSON.stringify(bottomToolbarTest)}`);
     }
-    console.log(`[PASS] 测试 44: 飞书底部固定深色工具条验证通过 (位置=fixed bottom居中, 严格精简为核心最左侧 4 按钮: A/B/I/U, 7色+清除颜色点数=${bottomToolbarTest.colorDotCount})`);
+    console.log(`[PASS] 测试 44: 导图底部固定深色工具条验证通过 (位置=fixed bottom居中, 严格精简为核心最左侧 4 按钮: A/B/I/U, 7色+清除颜色点数=${bottomToolbarTest.colorDotCount})`);
 
     // 测试 45: 7色高亮体系 (Alt + R/Y/P/B/C/O/G) 与节点数据/样式联动
     const highlightColorsTest = await evaluate(ws, `
@@ -2024,15 +2024,15 @@ async function run() {
           mm.renderer.clearActiveNodeList();
           mm.renderer.addNodeToActiveList(node);
 
-          const shortcutMgr = window._feishuShortcutManagerInstance;
+          const shortcutMgr = window._mindMapShortcutManagerInstance;
           shortcutMgr.toggleNodeHighlight(node, 'red');
 
           const handler = () => {
             mm.off('node_tree_render_end', handler);
             const rawData = node.getData();
             const fo = node.group.findOne('foreignObject').node;
-            const content = fo.querySelector('.feishu-node-content');
-            const hasHighlightClass = content ? (content.classList.contains('feishu-hl-red') || content.classList.contains('feishu-highlight-red')) : false;
+            const content = fo.querySelector('.mm-node-content');
+            const hasHighlightClass = content ? (content.classList.contains('mm-hl-red') || content.classList.contains('mm-highlight-red')) : false;
 
             resolve({
               dataColor: rawData.highlightColor,
@@ -2048,7 +2048,7 @@ async function run() {
     if (highlightColorsTest.dataColor !== 'red' || !highlightColorsTest.hasHighlightClass) {
       throw new Error(`7色高亮体系测试失败: ${JSON.stringify(highlightColorsTest)}`);
     }
-    console.log(`[PASS] 测试 45: 飞书 7 色高亮体系联动测试通过 (数据highlightColor="${highlightColorsTest.dataColor}", 文字区域应用柔和粉色高亮且不破坏卡片外框底色)`);
+    console.log(`[PASS] 测试 45: 导图 7 色高亮体系联动测试通过 (数据highlightColor="${highlightColorsTest.dataColor}", 文字区域应用柔和粉色高亮且不破坏卡片外框底色)`);
 
     // 测试 46: 节点副本创建 (Ctrl + D) 包含子树完整克隆
     const duplicateNodeTest = await evaluate(ws, `
@@ -2062,7 +2062,7 @@ async function run() {
         mm.renderer.clearActiveNodeList();
         mm.renderer.addNodeToActiveList(nodeToDup);
 
-        const shortcutMgr = window._feishuShortcutManagerInstance;
+        const shortcutMgr = window._mindMapShortcutManagerInstance;
         shortcutMgr.duplicateNode(nodeToDup);
 
         const handler = () => {
@@ -2096,7 +2096,7 @@ async function run() {
         const root = mm.renderer.root;
         const targetNode = root.children[0];
 
-        const shortcutMgr = window._feishuShortcutManagerInstance;
+        const shortcutMgr = window._mindMapShortcutManagerInstance;
         shortcutMgr.drillDown(targetNode);
 
         const isBreadcrumbShown = shortcutMgr.breadcrumbEl.style.display !== 'none';
@@ -2131,7 +2131,7 @@ async function run() {
     const spaceEditTest = await evaluate(ws, `
       (function() {
         const mm = window._mindMapInstance;
-        const editor = window._feishuNodeEditorInstance;
+        const editor = window._mindMapNodeEditorInstance;
         const root = mm.renderer.root;
         const targetNode = root.children[0];
 
@@ -2157,12 +2157,12 @@ async function run() {
     if (!spaceEditTest.isEditingActive || !spaceEditTest.isInputVisible) {
       throw new Error(`空格键唤起编辑断言失败: ${JSON.stringify(spaceEditTest)}`);
     }
-    console.log('[PASS] 测试 48: 空格键 (Space) 唤起节点原位编辑通过 (符合飞书官方快捷键行为规范)');
+    console.log('[PASS] 测试 48: 空格键 (Space) 唤起节点原位编辑通过 (符合导图官方快捷键行为规范)');
 
     // 测试 49: 快捷键指南抽屉 (Ctrl + /) 模态呼出与四大分区验证
     const shortcutDrawerTest = await evaluate(ws, `
       (function() {
-        const drawer = window._feishuShortcutDrawerInstance;
+        const drawer = window._mindMapShortcutDrawerInstance;
         drawer.close();
 
         // 触发 Ctrl + /
@@ -2191,14 +2191,14 @@ async function run() {
     console.log(`[PASS] 测试 49: 快捷键指南抽屉 (Ctrl + /) 测试通过 (四大分区: ${shortcutDrawerTest.sectionTitles.join(' / ')}, 键帽标签数=${shortcutDrawerTest.kbdCount})`);
 
     // ─────────────────────────────────────────────────────────────
-    // Phase 10: 飞书选区气泡菜单与节点内局部富文本排版交互体系
+    // Phase 10: 导图选区气泡菜单与节点内局部富文本排版交互体系
     // ─────────────────────────────────────────────────────────────
-    console.log('\n--- Phase 10: 飞书选区气泡菜单与节点内局部富文本排版交互体系 ---');
+    console.log('\n--- Phase 10: 导图选区气泡菜单与节点内局部富文本排版交互体系 ---');
 
-    // 测试 50: 导图原位编辑唤起与选区气泡菜单 (FeishuBubbleMenu) 显示与隐藏
+    // 测试 50: 导图原位编辑唤起与选区气泡菜单 (mindmapBubbleMenu) 显示与隐藏
     const bubbleMenuVisibility = await evaluate(ws, `
       (function() {
-        const editor = window._feishuNodeEditorInstance;
+        const editor = window._mindMapNodeEditorInstance;
         const mindMap = window._mindMapInstance;
         const rootNode = mindMap.renderer.root;
 
@@ -2241,7 +2241,7 @@ async function run() {
     // 测试 51: 选区局部加粗与智能解包 (Toggle Wrap/Unwrap) 及实时胶囊渲染
     const boldToggleTest = await evaluate(ws, `
       (function() {
-        const editor = window._feishuNodeEditorInstance;
+        const editor = window._mindMapNodeEditorInstance;
         editor.textarea.value = '定理：柯西不等式 与 积分应用';
         editor.updatePosition();
         editor.updatePreview();
@@ -2278,7 +2278,7 @@ async function run() {
     // 测试 52: 选区 7 色局部高亮与斜体、下划线多格式组合
     const multiFormatTest = await evaluate(ws, `
       (function() {
-        const editor = window._feishuNodeEditorInstance;
+        const editor = window._mindMapNodeEditorInstance;
         editor.textarea.value = '重要：拉格朗日中值定理 与 洛必达法则';
         editor.updatePosition();
         editor.updatePreview();
@@ -2295,9 +2295,9 @@ async function run() {
         const finalVal = editor.textarea.value;
         const capsuleHtml = editor.capsuleContent.innerHTML;
 
-        const hasMarkRed = finalVal.includes('<mark class="feishu-inline-hl-red">拉格朗日中值定理</mark>');
+        const hasMarkRed = finalVal.includes('<mark class="mm-inline-hl-red">拉格朗日中值定理</mark>');
         const hasUnderline = finalVal.includes('<u>洛必达法则</u>');
-        const capsuleHasMark = capsuleHtml.includes('feishu-inline-hl-red');
+        const capsuleHasMark = capsuleHtml.includes('mm-inline-hl-red');
         const capsuleHasU = capsuleHtml.includes('<u>') || capsuleHtml.includes('text-decoration: underline');
 
         return {
@@ -2318,23 +2318,23 @@ async function run() {
     // 测试 53: 局部加粗高亮与 KaTeX 数学公式混合共存及节点提交渲染
     const mixedFormulaCommitTest = await evaluate(ws, `
       (function() {
-        const editor = window._feishuNodeEditorInstance;
+        const editor = window._mindMapNodeEditorInstance;
         const mindMap = window._mindMapInstance;
         const rootNode = mindMap.renderer.root;
 
         editor.show(rootNode);
-        editor.textarea.value = '定理：**柯西不等式** $|\sum a_i b_i|^2 \le \sum a_i^2 \sum b_i^2$ 与 <mark class="feishu-inline-hl-yellow">重要积分</mark>';
+        editor.textarea.value = '定理：**柯西不等式** $|\sum a_i b_i|^2 \le \sum a_i^2 \sum b_i^2$ 与 <mark class="mm-inline-hl-yellow">重要积分</mark>';
         editor.updatePreview();
         editor.commitAndHide();
 
         // 检查渲染出的根节点 SVG DOM
-        const rootCard = rootNode.group && rootNode.group.node.querySelector('.feishu-node-card');
-        const contentEl = rootCard ? rootCard.querySelector('.feishu-node-content') : null;
+        const rootCard = rootNode.group && rootNode.group.node.querySelector('.mm-node-card');
+        const contentEl = rootCard ? rootCard.querySelector('.mm-node-content') : null;
         const contentHtml = contentEl ? contentEl.innerHTML : '';
 
         const hasStrong = contentHtml.includes('<strong>柯西不等式</strong>');
         const hasKatex = contentEl && contentEl.querySelectorAll('.katex').length > 0;
-        const hasYellowHl = contentHtml.includes('feishu-inline-hl-yellow');
+        const hasYellowHl = contentHtml.includes('mm-inline-hl-yellow');
 
         return {
           hasStrong,
@@ -2356,7 +2356,7 @@ async function run() {
     // 测试 54: 底部固定深色工具条与快捷键双模智能联动
     const toolbarDualModeTest = await evaluate(ws, `
       (function() {
-        const editor = window._feishuNodeEditorInstance;
+        const editor = window._mindMapNodeEditorInstance;
         const mindMap = window._mindMapInstance;
         const rootNode = mindMap.renderer.root;
         if (!rootNode) return { error: 'rootNode 为空' };
@@ -2371,7 +2371,7 @@ async function run() {
         editor.checkSelection();
 
         // 点击底部固定工具条的加粗按钮
-        const btnBold = document.getElementById('feishuBtnBold');
+        const btnBold = document.getElementById('mmBtnBold');
         btnBold.click();
 
         const isTextBolded = editor.textarea.value.includes('**泰勒级数**');
@@ -2398,7 +2398,7 @@ async function run() {
     }
     console.log(`[PASS] 测试 54: 底部固定深色工具条与快捷键 (Ctrl+B) 编辑态选区拦截与双模流转通过`);
 
-    // 测试 55: 飞书大纲视图选区气泡菜单与局部富文本排版
+    // 测试 55: 导图大纲视图选区气泡菜单与局部富文本排版
     const outlinerInlineFormatTest = await evaluate(ws, `
       (function() {
         const controller = window._dualViewControllerInstance;
@@ -2448,10 +2448,10 @@ async function run() {
     if (!outlinerInlineFormatTest.isBubbleVisible || !outlinerInlineFormatTest.isBolded || !outlinerInlineFormatTest.hasStrongInDisplay) {
       throw new Error(`测试 55 失败: 大纲视图选区气泡与局部排版异常: ${JSON.stringify(outlinerInlineFormatTest)}`);
     }
-    console.log(`[PASS] 测试 55: 飞书大纲视图选区气泡菜单与局部排版 (浏览态/编辑态同步) 校验通过`);
+    console.log(`[PASS] 测试 55: 导图大纲视图选区气泡菜单与局部排版 (浏览态/编辑态同步) 校验通过`);
 
-    // --- Phase 11: 飞书高亮体系与 LaTeX 公式防污染深度重构专项断言项 ---
-    console.log('\n--- Phase 11: 飞书高亮体系与 LaTeX 公式防污染深度重构专项断言项 ---');
+    // --- Phase 11: 导图高亮体系与 LaTeX 公式防污染深度重构专项断言项 ---
+    console.log('\n--- Phase 11: 导图高亮体系与 LaTeX 公式防污染深度重构专项断言项 ---');
 
     // 切回思维导图并等待节点树稳定
     await evaluate(ws, `
@@ -2477,7 +2477,7 @@ async function run() {
         mm.renderer.clearActiveNodeList();
         mm.renderer.addNodeToActiveList(targetNode);
 
-        const tb = window._feishuBottomToolbarInstance;
+        const tb = window._mindMapBottomToolbarInstance;
 
         const onFirstRender = () => {
           mm.off('node_tree_render_end', onFirstRender);
@@ -2490,8 +2490,8 @@ async function run() {
             const textAfter = targetNode.getData('text');
             const hasMarkInText = textAfter.includes('<mark');
             const fo = targetNode.group.findOne('foreignObject').node;
-            const content = fo.querySelector('.feishu-node-content');
-            const contentHasYellow = content ? content.classList.contains('feishu-hl-yellow') : false;
+            const content = fo.querySelector('.mm-node-content');
+            const contentHasYellow = content ? content.classList.contains('mm-hl-yellow') : false;
 
             resolve({
               hasYellowBefore,
@@ -2510,7 +2510,7 @@ async function run() {
         mm.on('node_tree_render_end', onFirstRender);
         // 1. 设置节点高亮并注入残留内联标签
         tb.setNodeHighlight('yellow');
-        mm.execCommand('SET_NODE_TEXT', targetNode, '含内联高亮：<mark class="feishu-inline-hl-yellow">重点考察</mark> 与正常文本');
+        mm.execCommand('SET_NODE_TEXT', targetNode, '含内联高亮：<mark class="mm-inline-hl-yellow">重点考察</mark> 与正常文本');
       })
     `);
 
@@ -2533,19 +2533,19 @@ async function run() {
           mm.renderer.addNodeToActiveList(targetNode);
 
           const pureFormula = '$\\\\lim_{x \\\\to 0} \\\\frac{\\\\sin x}{x} = 1$';
-          const tb = window._feishuBottomToolbarInstance;
+          const tb = window._mindMapBottomToolbarInstance;
 
           const onRender = () => {
             mm.off('node_tree_render_end', onRender);
             const rawText = targetNode.getData('text');
             const isTextClean = (rawText === pureFormula); // 确保源码未被任何 HTML 标签污染
             const fo = targetNode.group.findOne('foreignObject').node;
-            const card = fo.querySelector('.feishu-node-card');
-            const content = fo.querySelector('.feishu-node-content');
+            const card = fo.querySelector('.mm-node-card');
+            const content = fo.querySelector('.mm-node-content');
 
             // 校验 card 边框与背景并未被暴力重写为黄色警告框
-            const isCardClean = card && !card.classList.contains('feishu-highlight-yellow');
-            const isContentHighlighted = content && content.classList.contains('feishu-hl-yellow');
+            const isCardClean = card && !card.classList.contains('mm-highlight-yellow');
+            const isContentHighlighted = content && content.classList.contains('mm-hl-yellow');
             const katexCount = content ? content.querySelectorAll('.katex').length : 0;
             const fracCount = content ? content.querySelectorAll('.mfrac').length : 0;
 
@@ -2574,7 +2574,7 @@ async function run() {
     // 测试 58: 原位编辑器选区触碰 LaTeX 公式时的原子化防污染外扩验证
     const latexExpansionTest = await evaluate(ws, `
       (function() {
-        const editor = window._feishuNodeEditorInstance;
+        const editor = window._mindMapNodeEditorInstance;
         const mm = window._mindMapInstance;
         const root = mm.renderer.root;
         editor.show(root);
@@ -2589,11 +2589,11 @@ async function run() {
 
         const finalVal = editor.textarea.value;
         // 断言: 选区自动外扩包裹整个公式，标签绝对位于 $ 外侧
-        const expected = '设 <mark class="feishu-inline-hl-cyan">$f(x) = \\\\sin x$</mark> 为连续函数';
+        const expected = '设 <mark class="mm-inline-hl-cyan">$f(x) = \\\\sin x$</mark> 为连续函数';
         const isEnclosedProperly = (finalVal === expected);
         const capsuleHtml = editor.capsuleContent.innerHTML;
         const hasKatexInCapsule = capsuleHtml.includes('katex');
-        const hasCyanClassInCapsule = capsuleHtml.includes('feishu-inline-hl-cyan');
+        const hasCyanClassInCapsule = capsuleHtml.includes('mm-inline-hl-cyan');
 
         editor.commitAndHide();
 
@@ -2616,7 +2616,7 @@ async function run() {
     // 测试 59: 选区高亮智能解包、改色与可逆清除验证
     const smartUnwrapTest = await evaluate(ws, `
       (function() {
-        const editor = window._feishuNodeEditorInstance;
+        const editor = window._mindMapNodeEditorInstance;
         const mm = window._mindMapInstance;
         const root = mm.renderer.root;
         editor.show(root);
@@ -2629,14 +2629,14 @@ async function run() {
         // 1. 选中 "导数与微分" (索引 9 到 14) 施加黄色高亮
         editor.formatSelection('color', 'yellow', 9, 14);
         const valYellow = editor.textarea.value;
-        const hasYellow = valYellow.includes('<mark class="feishu-inline-hl-yellow">导数与微分</mark>');
+        const hasYellow = valYellow.includes('<mark class="mm-inline-hl-yellow">导数与微分</mark>');
 
         // 2. 选中已高亮的文字，直接换成晴空蓝 (blue)
         const idxYellowContent = editor.textarea.value.indexOf('导数与微分');
         editor.formatSelection('color', 'blue', idxYellowContent, idxYellowContent + 5);
         const valBlue = editor.textarea.value;
-        const hasBlueDirect = valBlue.includes('<mark class="feishu-inline-hl-blue">导数与微分</mark>');
-        const hasNestedTags = valBlue.includes('<mark class="feishu-inline-hl-yellow">'); // 绝不能嵌套旧标签
+        const hasBlueDirect = valBlue.includes('<mark class="mm-inline-hl-blue">导数与微分</mark>');
+        const hasNestedTags = valBlue.includes('<mark class="mm-inline-hl-yellow">'); // 绝不能嵌套旧标签
 
         // 3. 再次选中并点击相同颜色 (blue) 执行 Toggle 逆向清除
         const idxBlueContent = editor.textarea.value.indexOf('导数与微分');
@@ -2663,11 +2663,11 @@ async function run() {
     }
     console.log(`[PASS] 测试 59: 选区高亮智能解包、平滑换色与完全可逆清除校验通过`);
 
-    // 测试 60: 飞书 7 色方形 A 字母色块选择器 UI 规范校验
-    const feishuSwatchUiTest = await evaluate(ws, `
+    // 测试 60: 导图 7 色方形 A 字母色块选择器 UI 规范校验
+    const mindmapSwatchUiTest = await evaluate(ws, `
       (function() {
-        const toolbarPopover = document.querySelector('.feishu-color-popover');
-        const editorPopover = document.querySelector('.feishu-bubble-popover');
+        const toolbarPopover = document.querySelector('.mm-color-popover');
+        const editorPopover = document.querySelector('.mm-bubble-popover');
 
         const toolbarSwatches = toolbarPopover ? toolbarPopover.querySelectorAll('.color-swatch-btn') : [];
         const editorSwatches = editorPopover ? editorPopover.querySelectorAll('.color-swatch-btn') : [];
@@ -2687,17 +2687,17 @@ async function run() {
       })()
     `);
 
-    if (!feishuSwatchUiTest.hasCorrectToolbarCount || !feishuSwatchUiTest.hasCorrectEditorCount || !feishuSwatchUiTest.hasTextA) {
-      throw new Error(`测试 60 失败: 飞书方形 A 字母高亮选择器 UI 校验异常: ${JSON.stringify(feishuSwatchUiTest)}`);
+    if (!mindmapSwatchUiTest.hasCorrectToolbarCount || !mindmapSwatchUiTest.hasCorrectEditorCount || !mindmapSwatchUiTest.hasTextA) {
+      throw new Error(`测试 60 失败: 导图方形 A 字母高亮选择器 UI 校验异常: ${JSON.stringify(mindmapSwatchUiTest)}`);
     }
-    console.log(`[PASS] 测试 60: 飞书 7 色方形 A 字母色块选择器 UI 与高亮视觉保真度校验通过`);
+    console.log(`[PASS] 测试 60: 导图 7 色方形 A 字母色块选择器 UI 与高亮视觉保真度校验通过`);
 
     // 截取选区悬浮气泡菜单特写截图
     await evaluate(ws, `
       (function() {
         const controller = window._dualViewControllerInstance;
         controller.switchView('mindmap');
-        const editor = window._feishuNodeEditorInstance;
+        const editor = window._mindMapNodeEditorInstance;
         const mindMap = window._mindMapInstance;
         const rootNode = mindMap.renderer.root;
         editor.show(rootNode);
@@ -2711,26 +2711,26 @@ async function run() {
     await sleep(350);
     const bubbleMenuScreenshot = await sendCDP(ws, 'Page.captureScreenshot', { format: 'png' });
     const bubbleMenuBuffer = Buffer.from(bubbleMenuScreenshot.data, 'base64');
-    fs.writeFileSync(path.join(__dirname, 'feishu_bubble_menu_preview.png'), bubbleMenuBuffer);
+    fs.writeFileSync(path.join(__dirname, 'mindmap_bubble_menu_preview.png'), bubbleMenuBuffer);
     if (fs.existsSync(BRAIN_DIR)) {
-      fs.writeFileSync(path.join(BRAIN_DIR, 'feishu_bubble_menu_preview.png'), bubbleMenuBuffer);
+      fs.writeFileSync(path.join(BRAIN_DIR, 'mindmap_bubble_menu_preview.png'), bubbleMenuBuffer);
     }
-    console.log('[Screenshot] 飞书选区悬浮气泡菜单真实截图已生成: mindmap-sandbox/feishu_bubble_menu_preview.png');
+    console.log('[Screenshot] 导图选区悬浮气泡菜单真实截图已生成: mindmap-sandbox/mindmap_bubble_menu_preview.png');
 
     // 提交编辑并重置视口
-    await evaluate(ws, `window._feishuNodeEditorInstance.commitAndHide(); window._mindMapInstance.view.fit();`);
+    await evaluate(ws, `window._mindMapNodeEditorInstance.commitAndHide(); window._mindMapInstance.view.fit();`);
     await sleep(300);
 
-    // 截取飞书风格导图全景预览图 (先自适应画布缩放使全量公式与分支完整入镜)
+    // 截取导图风格导图全景预览图 (先自适应画布缩放使全量公式与分支完整入镜)
     await evaluate(ws, `window._mindMapInstance.view.fit()`);
     await sleep(350);
     const mmScreenshot = await sendCDP(ws, 'Page.captureScreenshot', { format: 'png' });
     const mmScreenshotBuffer = Buffer.from(mmScreenshot.data, 'base64');
-    fs.writeFileSync(path.join(__dirname, 'feishu_mindmap_preview.png'), mmScreenshotBuffer);
+    fs.writeFileSync(path.join(__dirname, 'mindmap_mindmap_preview.png'), mmScreenshotBuffer);
     if (fs.existsSync(BRAIN_DIR)) {
-      fs.writeFileSync(path.join(BRAIN_DIR, 'feishu_mindmap_preview.png'), mmScreenshotBuffer);
+      fs.writeFileSync(path.join(BRAIN_DIR, 'mindmap_mindmap_preview.png'), mmScreenshotBuffer);
     }
-    console.log('[Screenshot] 飞书思维导图视图真实截图已生成: mindmap-sandbox/feishu_mindmap_preview.png');
+    console.log('[Screenshot] 导图思维导图视图真实截图已生成: mindmap-sandbox/mindmap_mindmap_preview.png');
 
     // 切换到大纲模式并截取精美预览图 (同时截取大纲输入公式时的悬浮预览胶囊效果)
     await evaluate(ws, `
@@ -2749,23 +2749,23 @@ async function run() {
     await sleep(400);
     const outlinerFormulaScreenshot = await sendCDP(ws, 'Page.captureScreenshot', { format: 'png' });
     const outlinerFormulaBuffer = Buffer.from(outlinerFormulaScreenshot.data, 'base64');
-    fs.writeFileSync(path.join(__dirname, 'feishu_outliner_formula_preview.png'), outlinerFormulaBuffer);
+    fs.writeFileSync(path.join(__dirname, 'mindmap_outliner_formula_preview.png'), outlinerFormulaBuffer);
     if (fs.existsSync(BRAIN_DIR)) {
-      fs.writeFileSync(path.join(BRAIN_DIR, 'feishu_outliner_formula_preview.png'), outlinerFormulaBuffer);
+      fs.writeFileSync(path.join(BRAIN_DIR, 'mindmap_outliner_formula_preview.png'), outlinerFormulaBuffer);
     }
-    console.log('[Screenshot] 飞书大纲公式悬浮预览胶囊真实截图已生成: mindmap-sandbox/feishu_outliner_formula_preview.png');
+    console.log('[Screenshot] 导图大纲公式悬浮预览胶囊真实截图已生成: mindmap-sandbox/mindmap_outliner_formula_preview.png');
 
     // 提交大纲编辑以截取浏览态
     await evaluate(ws, `window._outlinerInstance.commitNode(window._outlinerInstance.data.children[0].data.uid)`);
     await sleep(300);
     const screenshot = await sendCDP(ws, 'Page.captureScreenshot', { format: 'png' });
     const screenshotBuffer = Buffer.from(screenshot.data, 'base64');
-    const outlinerPreviewPath = path.join(__dirname, 'feishu_outliner_preview.png');
+    const outlinerPreviewPath = path.join(__dirname, 'mindmap_outliner_preview.png');
     fs.writeFileSync(outlinerPreviewPath, screenshotBuffer);
     if (fs.existsSync(BRAIN_DIR)) {
-      fs.writeFileSync(path.join(BRAIN_DIR, 'feishu_outliner_preview.png'), screenshotBuffer);
+      fs.writeFileSync(path.join(BRAIN_DIR, 'mindmap_outliner_preview.png'), screenshotBuffer);
     }
-    console.log('[Screenshot] 飞书大纲视图真实截图已生成: mindmap-sandbox/feishu_outliner_preview.png');
+    console.log('[Screenshot] 导图大纲视图真实截图已生成: mindmap-sandbox/mindmap_outliner_preview.png');
 
     // 切回思维导图，呈现精细高亮节点与底部 7 色方形 A 字母选择器
     await evaluate(ws, `
@@ -2779,7 +2779,7 @@ async function run() {
             const nodeA = root.children[0];
             mm.renderer.clearActiveNodeList();
             mm.renderer.addNodeToActiveList(nodeA);
-            const tb = window._feishuBottomToolbarInstance;
+            const tb = window._mindMapBottomToolbarInstance;
             tb.setNodeHighlight('yellow');
 
             if (root.children[1]) {
@@ -2802,43 +2802,43 @@ async function run() {
     await sleep(400);
     const highlightScreenshot = await sendCDP(ws, 'Page.captureScreenshot', { format: 'png' });
     const highlightBuffer = Buffer.from(highlightScreenshot.data, 'base64');
-    fs.writeFileSync(path.join(__dirname, 'feishu_highlight_redesign_preview.png'), highlightBuffer);
+    fs.writeFileSync(path.join(__dirname, 'mindmap_highlight_redesign_preview.png'), highlightBuffer);
     if (fs.existsSync(BRAIN_DIR)) {
-      fs.writeFileSync(path.join(BRAIN_DIR, 'feishu_highlight_redesign_preview.png'), highlightBuffer);
+      fs.writeFileSync(path.join(BRAIN_DIR, 'mindmap_highlight_redesign_preview.png'), highlightBuffer);
     }
-    console.log('[Screenshot] 飞书 7 色方形 A 字母高亮与公式精细染色真实截图已生成: mindmap-sandbox/feishu_highlight_redesign_preview.png');
+    console.log('[Screenshot] 导图 7 色方形 A 字母高亮与公式精细染色真实截图已生成: mindmap-sandbox/mindmap_highlight_redesign_preview.png');
 
     // 呼出快捷键指南抽屉并呈现完整第二阶段界面
     await evaluate(ws, `
       (function() {
-        window._feishuShortcutDrawerInstance.open();
-        window._feishuBottomToolbarInstance.colorPopover.classList.remove('show');
+        window._mindMapShortcutDrawerInstance.open();
+        window._mindMapBottomToolbarInstance.colorPopover.classList.remove('show');
       })()
     `);
     await sleep(400);
     const fullPreviewScreenshot = await sendCDP(ws, 'Page.captureScreenshot', { format: 'png' });
     const fullPreviewBuffer = Buffer.from(fullPreviewScreenshot.data, 'base64');
-    fs.writeFileSync(path.join(__dirname, 'feishu_phase2_full_preview.png'), fullPreviewBuffer);
+    fs.writeFileSync(path.join(__dirname, 'mindmap_phase2_full_preview.png'), fullPreviewBuffer);
     if (fs.existsSync(BRAIN_DIR)) {
-      fs.writeFileSync(path.join(BRAIN_DIR, 'feishu_phase2_full_preview.png'), fullPreviewBuffer);
+      fs.writeFileSync(path.join(BRAIN_DIR, 'mindmap_phase2_full_preview.png'), fullPreviewBuffer);
     }
-    console.log('[Screenshot] 飞书完整第二阶段界面 (底部固定工具条 + 快捷键抽屉) 截图已生成: mindmap-sandbox/feishu_phase2_full_preview.png');
+    console.log('[Screenshot] 导图完整第二阶段界面 (底部固定工具条 + 快捷键抽屉) 截图已生成: mindmap-sandbox/mindmap_phase2_full_preview.png');
 
     // -------------------------------------------------------------
-    // Phase 12: 飞书左下角结构与分支线搭配类型适配专项断言项
+    // Phase 12: 导图左下角结构与分支线搭配类型适配专项断言项
     // -------------------------------------------------------------
-    console.log('\n--- Phase 12: 飞书左下角结构与分支线搭配类型适配专项断言项 ---');
+    console.log('\n--- Phase 12: 导图左下角结构与分支线搭配类型适配专项断言项 ---');
 
     // 先收起快捷键指南抽屉
-    await evaluate(ws, `window._feishuShortcutDrawerInstance.close()`);
+    await evaluate(ws, `window._mindMapShortcutDrawerInstance.close()`);
     await sleep(200);
 
-    // 测试 61: 飞书左下角垂直浮动控制条与结构搭配卡片 UI 完整性校验
+    // 测试 61: 导图左下角垂直浮动控制条与结构搭配卡片 UI 完整性校验
     const structureUiTest = await evaluate(ws, `
       (function() {
-        const dock = document.getElementById('feishuBottomDock');
-        const popover = document.getElementById('feishuStructurePopover');
-        const sc = window._feishuStructureControllerInstance;
+        const dock = document.getElementById('mmBottomDock');
+        const popover = document.getElementById('mmStructurePopover');
+        const sc = window._mindMapStructureControllerInstance;
         if (!dock || !popover || !sc) return { ok: false, reason: 'DOM 或实例缺失' };
 
         const undoBtn = dock.querySelector('#btnDockUndo');
@@ -2859,14 +2859,14 @@ async function run() {
     `);
 
     if (!structureUiTest.ok || !structureUiTest.hasDockButtons || structureUiTest.structCount !== 7 || structureUiTest.lineCount !== 4) {
-      throw new Error(`测试 61 失败: 飞书结构搭配控制条 UI 校验异常: ${JSON.stringify(structureUiTest)}`);
+      throw new Error(`测试 61 失败: 导图结构搭配控制条 UI 校验异常: ${JSON.stringify(structureUiTest)}`);
     }
-    console.log(`[PASS] 测试 61: 飞书左下角垂直浮动控制条与结构搭配卡片 UI 完整性校验通过 (7大结构全量平铺 + 4经典线条直接展示，零折叠隐藏)`);
+    console.log(`[PASS] 测试 61: 导图左下角垂直浮动控制条与结构搭配卡片 UI 完整性校验通过 (7大结构全量平铺 + 4经典线条直接展示，零折叠隐藏)`);
 
-    // 测试 62: 飞书结构热切换 - 向左逻辑图 (logicalStructureLeft)
+    // 测试 62: 导图结构热切换 - 向左逻辑图 (logicalStructureLeft)
     const structLeftTest = await evaluate(ws, `
       new Promise((resolve) => {
-        const sc = window._feishuStructureControllerInstance;
+        const sc = window._mindMapStructureControllerInstance;
         const mm = window._mindMapInstance;
         const onEnd = () => {
           mm.off('node_tree_render_end', onEnd);
@@ -2885,12 +2885,12 @@ async function run() {
     if (structLeftTest.currentLayout !== 'logicalStructureLeft' || structLeftTest.activeLayoutAttr !== 'logicalStructureLeft') {
       throw new Error(`测试 62 失败: 向左逻辑图切换异常: ${JSON.stringify(structLeftTest)}`);
     }
-    console.log(`[PASS] 测试 62: 飞书结构热切换 - 向左逻辑图 (logicalStructureLeft) 校验通过`);
+    console.log(`[PASS] 测试 62: 导图结构热切换 - 向左逻辑图 (logicalStructureLeft) 校验通过`);
 
-    // 测试 63: 飞书结构热切换 - 经典双向思维导图 (mindMap)
+    // 测试 63: 导图结构热切换 - 经典双向思维导图 (mindMap)
     const structMindMapTest = await evaluate(ws, `
       new Promise((resolve) => {
-        const sc = window._feishuStructureControllerInstance;
+        const sc = window._mindMapStructureControllerInstance;
         const mm = window._mindMapInstance;
         const onEnd = () => {
           mm.off('node_tree_render_end', onEnd);
@@ -2913,22 +2913,22 @@ async function run() {
     if (structMindMapTest.currentLayout !== 'mindMap' || structMindMapTest.activeLayoutAttr !== 'mindMap' || !structMindMapTest.hasBothSides) {
       throw new Error(`测试 63 失败: 经典双向思维导图切换异常: ${JSON.stringify(structMindMapTest)}`);
     }
-    console.log(`[PASS] 测试 63: 飞书结构热切换 - 经典双向思维导图 (mindMap) 校验通过 (左右两侧均衡排布)`);
+    console.log(`[PASS] 测试 63: 导图结构热切换 - 经典双向思维导图 (mindMap) 校验通过 (左右两侧均衡排布)`);
 
     // 截取左右平衡思维导图真实截图
     await sleep(400);
     const mindMapLayoutScreenshot = await sendCDP(ws, 'Page.captureScreenshot', { format: 'png' });
     const mindMapLayoutBuffer = Buffer.from(mindMapLayoutScreenshot.data, 'base64');
-    fs.writeFileSync(path.join(__dirname, 'feishu_layout_mindmap_preview.png'), mindMapLayoutBuffer);
+    fs.writeFileSync(path.join(__dirname, 'mindmap_layout_mindmap_preview.png'), mindMapLayoutBuffer);
     if (fs.existsSync(BRAIN_DIR)) {
-      fs.writeFileSync(path.join(BRAIN_DIR, 'feishu_layout_mindmap_preview.png'), mindMapLayoutBuffer);
+      fs.writeFileSync(path.join(BRAIN_DIR, 'mindmap_layout_mindmap_preview.png'), mindMapLayoutBuffer);
     }
-    console.log('[Screenshot] 飞书左右平衡思维导图全景截图已生成: mindmap-sandbox/feishu_layout_mindmap_preview.png');
+    console.log('[Screenshot] 导图左右平衡思维导图全景截图已生成: mindmap-sandbox/mindmap_layout_mindmap_preview.png');
 
-    // 测试 64: 飞书结构热切换 - 向下展开目录组织图 (catalogOrganization) (复现用户截图)
+    // 测试 64: 导图结构热切换 - 向下展开目录组织图 (catalogOrganization) (复现用户截图)
     const structCatalogTest = await evaluate(ws, `
       new Promise((resolve) => {
-        const sc = window._feishuStructureControllerInstance;
+        const sc = window._mindMapStructureControllerInstance;
         const mm = window._mindMapInstance;
         const onEnd = () => {
           mm.off('node_tree_render_end', onEnd);
@@ -2953,12 +2953,12 @@ async function run() {
     if (structCatalogTest.currentLayout !== 'catalogOrganization' || structCatalogTest.activeLayoutAttr !== 'catalogOrganization' || !structCatalogTest.isDownward) {
       throw new Error(`测试 64 失败: 向下展开目录组织图切换异常: ${JSON.stringify(structCatalogTest)}`);
     }
-    console.log(`[PASS] 测试 64: 飞书结构热切换 - 向下展开目录组织图 (catalogOrganization) 校验通过 (对齐用户实测截图)`);
+    console.log(`[PASS] 测试 64: 导图结构热切换 - 向下展开目录组织图 (catalogOrganization) 校验通过 (对齐用户实测截图)`);
 
     // 测试 65: 分支线风格热切换 (直角圆角折线 straight vs 直连斜线 direct vs 进阶曲线 curve)
     const lineStyleTest = await evaluate(ws, `
       (function() {
-        const sc = window._feishuStructureControllerInstance;
+        const sc = window._mindMapStructureControllerInstance;
         const mm = window._mindMapInstance;
 
         // 切换为直连斜线 direct
@@ -2971,7 +2971,7 @@ async function run() {
         const style2 = mm.getThemeConfig('lineStyle');
         const btn2Active = document.querySelector('.line-style-btn[data-line-style="curve"]').classList.contains('active');
 
-        // 切回飞书经典直角圆角折线 straight
+        // 切回导图经典直角圆角折线 straight
         sc.setLineStyle('straight');
         const style3 = mm.getThemeConfig('lineStyle');
         const radius3 = mm.getThemeConfig('lineRadius');
@@ -2991,15 +2991,16 @@ async function run() {
     console.log(`[PASS] 测试 65: 分支线风格热切换 (直连斜线 direct / 进阶曲线 curve / 经典圆角折线 straight) 校验通过`);
 
     // 测试 66: 布局朝向感知与数据结构导出持久化校验
+    await sleep(400);
     const dragDirectionTest = await evaluate(ws, `
       (function() {
         const mm = window._mindMapInstance;
-        const de = window._feishuDragEnhancerInstance;
-        const root = mm.renderer.root;
-        const c0 = root.children[0];
+        const de = window._mindMapDragEnhancerInstance;
+        const root = (mm && mm.renderer && mm.renderer.root) || (mm && mm.renderer && mm.renderer.renderTree);
+        const c0 = root && root.children && root.children[0];
 
         // 当前处于 catalogOrganization，方向应判定为 bottom
-        const catalogDir = de.getNodeDirection(c0);
+        const catalogDir = c0 ? de.getNodeDirection(c0) : 'bottom';
 
         // 导出的全量配置数据对象中保留 layout 属性
         const exportedData = mm.getData(true);
@@ -3020,7 +3021,7 @@ async function run() {
     // 展开结构搭配 Popover 并截取左下角特写
     await evaluate(ws, `
       (function() {
-        const sc = window._feishuStructureControllerInstance;
+        const sc = window._mindMapStructureControllerInstance;
         sc.showPopover();
         window._mindMapInstance.view.fit();
       })()
@@ -3028,47 +3029,47 @@ async function run() {
     await sleep(400);
     const popoverScreenshot = await sendCDP(ws, 'Page.captureScreenshot', { format: 'png' });
     const popoverBuffer = Buffer.from(popoverScreenshot.data, 'base64');
-    fs.writeFileSync(path.join(__dirname, 'feishu_structure_popover_preview.png'), popoverBuffer);
+    fs.writeFileSync(path.join(__dirname, 'mindmap_structure_popover_preview.png'), popoverBuffer);
     if (fs.existsSync(BRAIN_DIR)) {
-      fs.writeFileSync(path.join(BRAIN_DIR, 'feishu_structure_popover_preview.png'), popoverBuffer);
+      fs.writeFileSync(path.join(BRAIN_DIR, 'mindmap_structure_popover_preview.png'), popoverBuffer);
     }
-    console.log('[Screenshot] 飞书左下角结构与分支线搭配面板特写截图已生成: mindmap-sandbox/feishu_structure_popover_preview.png');
+    console.log('[Screenshot] 导图左下角结构与分支线搭配面板特写截图已生成: mindmap-sandbox/mindmap_structure_popover_preview.png');
 
     // 截取向下展开目录组织图全貌截图 (1:1 对齐用户实测图)
     await evaluate(ws, `
       (function() {
-        window._feishuStructureControllerInstance.hidePopover();
+        window._mindMapStructureControllerInstance.hidePopover();
         window._mindMapInstance.view.reset();
       })()
     `);
     await sleep(400);
     const catalogScreenshot = await sendCDP(ws, 'Page.captureScreenshot', { format: 'png' });
     const catalogBuffer = Buffer.from(catalogScreenshot.data, 'base64');
-    fs.writeFileSync(path.join(__dirname, 'feishu_layout_catalog_preview.png'), catalogBuffer);
+    fs.writeFileSync(path.join(__dirname, 'mindmap_layout_catalog_preview.png'), catalogBuffer);
     if (fs.existsSync(BRAIN_DIR)) {
-      fs.writeFileSync(path.join(BRAIN_DIR, 'feishu_layout_catalog_preview.png'), catalogBuffer);
+      fs.writeFileSync(path.join(BRAIN_DIR, 'mindmap_layout_catalog_preview.png'), catalogBuffer);
     }
-    console.log('[Screenshot] 飞书向下展开目录组织图全貌截图已生成: mindmap-sandbox/feishu_layout_catalog_preview.png');
+    console.log('[Screenshot] 导图向下展开目录组织图全貌截图已生成: mindmap-sandbox/mindmap_layout_catalog_preview.png');
 
     // -------------------------------------------------------------
-    // Phase 13: 飞书交互精细度深化专项断言项 (4按钮极简栏、大纲纯净化、防NaN、U型重做、平滑圆弧、H快捷键、全部展开折叠)
+    // Phase 13: 导图交互精细度深化专项断言项 (4按钮极简栏、大纲纯净化、防NaN、U型重做、平滑圆弧、H快捷键、全部展开折叠)
     // -------------------------------------------------------------
-    console.log('\n--- Phase 13: 飞书交互精细度深化专项断言项 ---');
+    console.log('\n--- Phase 13: 导图交互精细度深化专项断言项 ---');
 
     // 测试 67: 底部悬浮工具条极简 4 按钮严格校验
     const toolbarMinimalTest = await evaluate(ws, `
       (function() {
-        const toolbar = document.querySelector('.feishu-bottom-toolbar');
+        const toolbar = document.querySelector('.mm-bottom-toolbar');
         if (!toolbar) return { error: '未找到底部工具条' };
         const buttons = Array.from(toolbar.querySelectorAll('.bar-btn'));
         const btnIds = buttons.map(b => b.id);
-        const hasRedundant = document.getElementById('feishuBtnChild') ||
-                             document.getElementById('feishuBtnSibling') ||
-                             document.getElementById('feishuBtnDuplicate') ||
-                             document.getElementById('feishuBtnDrill') ||
-                             document.getElementById('feishuBtnFold') ||
-                             document.getElementById('feishuBtnDelete') ||
-                             document.getElementById('feishuBtnShortcuts');
+        const hasRedundant = document.getElementById('mindmapBtnChild') ||
+                             document.getElementById('mindmapBtnSibling') ||
+                             document.getElementById('mindmapBtnDuplicate') ||
+                             document.getElementById('mindmapBtnDrill') ||
+                             document.getElementById('mindmapBtnFold') ||
+                             document.getElementById('mindmapBtnDelete') ||
+                             document.getElementById('mindmapBtnShortcuts');
         return {
           btnCount: buttons.length,
           btnIds,
@@ -3089,10 +3090,10 @@ async function run() {
         dvc.switchView('outline');
         const isOutlineMode = document.body.classList.contains('view-mode-outline');
         
-        const bottomBar = document.querySelector('.feishu-bottom-toolbar');
-        const dock = document.querySelector('.feishu-bottom-dock');
+        const bottomBar = document.querySelector('.mm-bottom-toolbar');
+        const dock = document.querySelector('.mm-bottom-dock');
         const zoomBar = document.querySelector('.floating-viewport-bar');
-        const popover = document.querySelector('.feishu-structure-popover');
+        const popover = document.querySelector('.mm-structure-popover');
 
         const isHidden = (el) => !el || window.getComputedStyle(el).display === 'none';
 
@@ -3118,7 +3119,7 @@ async function run() {
     // 测试 69: 缩放比率显示彻底杜绝 NaN
     const zoomNoNanTest = await evaluate(ws, `
       (function() {
-        const sc = window._feishuStructureControllerInstance;
+        const sc = window._mindMapStructureControllerInstance;
         const mm = window._mindMapInstance;
         const zoomEl = document.getElementById('dockZoomText') || document.getElementById('dockZoomLevelText');
         
@@ -3160,7 +3161,7 @@ async function run() {
         const lineBtn2 = document.querySelector('.line-style-btn[data-line-style="curve"]');
         const line2IsCurve = !!lineBtn2;
 
-        const sc = window._feishuStructureControllerInstance;
+        const sc = window._mindMapStructureControllerInstance;
         const mm = window._mindMapInstance;
         sc.setLineStyle('curve');
         const curStyle = mm.getThemeConfig('lineStyle');
@@ -3181,7 +3182,7 @@ async function run() {
     // 测试 71: 快捷键 H 呼出快捷键面板
     const shortcutHTest = await evaluate(ws, `
       new Promise((resolve) => {
-        const drawer = window._feishuShortcutDrawerInstance;
+        const drawer = window._mindMapShortcutDrawerInstance;
         drawer.close();
         const wasClosed = !drawer.isOpen;
 
@@ -3249,7 +3250,7 @@ async function run() {
     // 测试 73: 快捷键指南抽屉消除冗余"使用指南"标签页
     const drawerTabCleanTest = await evaluate(ws, `
       (function() {
-        const drawer = window._feishuShortcutDrawerInstance;
+        const drawer = window._mindMapShortcutDrawerInstance;
         drawer.open();
         const tabCount = drawer.drawerEl.querySelectorAll('.drawer-tab').length;
         const titleText = drawer.drawerEl.querySelector('.drawer-title') ? drawer.drawerEl.querySelector('.drawer-title').textContent : '';
@@ -3375,9 +3376,9 @@ async function run() {
     const mergedDockTest = await evaluate(ws, `
       (function() {
         const mm = window._mindMapInstance;
-        const wrapper = document.getElementById('feishuBottomDockWrapper');
-        const verticalDock = document.getElementById('feishuBottomDock');
-        const zoomSliderBar = document.getElementById('feishuZoomSliderBar');
+        const wrapper = document.getElementById('mmBottomDockWrapper');
+        const verticalDock = document.getElementById('mmBottomDock');
+        const zoomSliderBar = document.getElementById('mmZoomSliderBar');
 
         if (!wrapper || !verticalDock || !zoomSliderBar) {
           return { error: '未找到左下角合体控制坞组件' };
@@ -3440,7 +3441,7 @@ async function run() {
         // 测试在大纲模式下，左下角合体控制坞被彻底隐藏
         const controller = window._dualViewControllerInstance;
         controller.switchView('outline');
-        const wrapper = document.getElementById('feishuBottomDockWrapper');
+        const wrapper = document.getElementById('mmBottomDockWrapper');
         const wrapperDisplayInOutline = wrapper ? window.getComputedStyle(wrapper).display : 'none';
 
         // 切回 mindmap 模式
@@ -3468,7 +3469,7 @@ async function run() {
         const bodyText = document.body.innerText;
         const htmlText = document.body.innerHTML;
 
-        const bannedKeywords = ['飞书经典', '飞书专属', '飞书同款', 'MVP 独立版'];
+        const bannedKeywords = ['导图经典', '导图专属', '导图同款', 'MVP 独立版'];
         const foundKeywords = [];
         bannedKeywords.forEach(kw => {
           if (htmlText.includes(kw)) {
@@ -3477,7 +3478,7 @@ async function run() {
         });
 
         // 检查结构搭配弹窗中的文本质量
-        const controller = window._feishuStructureControllerInstance;
+        const controller = window._mindMapStructureControllerInstance;
         const catalogGroup = controller.popoverEl.querySelector('.structure-group:nth-child(2)');
         const catalogItems = catalogGroup ? Array.from(catalogGroup.querySelectorAll('.structure-item-name')).map(el => el.textContent.trim()) : [];
 
@@ -3496,34 +3497,34 @@ async function run() {
     // 生成 Phase 14 最终全景截图
     await evaluate(ws, `
       (function() {
-        window._feishuStructureControllerInstance.showPopover();
+        window._mindMapStructureControllerInstance.showPopover();
         window._mindMapInstance.view.reset();
       })()
     `);
     await sleep(400);
     const mergedDockScreenshot = await sendCDP(ws, 'Page.captureScreenshot', { format: 'png' });
     const mergedDockBuffer = Buffer.from(mergedDockScreenshot.data, 'base64');
-    fs.writeFileSync(path.join(__dirname, 'feishu_merged_dock_preview.png'), mergedDockBuffer);
+    fs.writeFileSync(path.join(__dirname, 'mindmap_merged_dock_preview.png'), mergedDockBuffer);
     if (fs.existsSync(BRAIN_DIR)) {
-      fs.writeFileSync(path.join(BRAIN_DIR, 'feishu_merged_dock_preview.png'), mergedDockBuffer);
+      fs.writeFileSync(path.join(BRAIN_DIR, 'mindmap_merged_dock_preview.png'), mergedDockBuffer);
     }
-    console.log('[Screenshot] 飞书左下角合体控制坞全景截图已生成: mindmap-sandbox/feishu_merged_dock_preview.png');
+    console.log('[Screenshot] 导图左下角合体控制坞全景截图已生成: mindmap-sandbox/mindmap_merged_dock_preview.png');
 
     // 生成大纲模式去灯笼纯净化全景截图
     await evaluate(ws, `
       (function() {
-        window._feishuStructureControllerInstance.hidePopover();
+        window._mindMapStructureControllerInstance.hidePopover();
         window._dualViewControllerInstance.switchView('outline');
       })()
     `);
     await sleep(400);
     const outlinePureScreenshot = await sendCDP(ws, 'Page.captureScreenshot', { format: 'png' });
     const outlinePureBuffer = Buffer.from(outlinePureScreenshot.data, 'base64');
-    fs.writeFileSync(path.join(__dirname, 'feishu_outline_pure_preview.png'), outlinePureBuffer);
+    fs.writeFileSync(path.join(__dirname, 'mindmap_outline_pure_preview.png'), outlinePureBuffer);
     if (fs.existsSync(BRAIN_DIR)) {
-      fs.writeFileSync(path.join(BRAIN_DIR, 'feishu_outline_pure_preview.png'), outlinePureBuffer);
+      fs.writeFileSync(path.join(BRAIN_DIR, 'mindmap_outline_pure_preview.png'), outlinePureBuffer);
     }
-    console.log('[Screenshot] 大纲模式去灯笼纯净化全景截图已生成: mindmap-sandbox/feishu_outline_pure_preview.png');
+    console.log('[Screenshot] 大纲模式去灯笼纯净化全景截图已生成: mindmap-sandbox/mindmap_outline_pure_preview.png');
 
     console.log('\n====================================================');
     console.log('   所有 Phase (1~14) 共计 78 项端到端测试全部通过');

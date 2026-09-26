@@ -1,28 +1,37 @@
 /**
- * 飞书思维笔记快捷键指南抽屉 (FeishuShortcutDrawer)
+ * 思维导图快捷键指南抽屉 (MindMapShortcutDrawer)
  * 职责：
- * 1. 挂载于界面右侧的滑出式面板 (Right Drawer)
- * 2. 忠实呈现飞书思维笔记核心快捷键指南 (常用、节点样式、节点操作、导航)
- * 3. 剔除无用的空使用指南标签页，直观展示紧凑快捷键清单
- * 4. 支持 Ctrl + / 全局唤起与切换，按 Esc 或点击关闭按钮平滑收起
- * 5. 严格零表情符号规范
+ * 1. 挂载于指定容器或界面右侧的滑出式面板 (Right Drawer)
+ * 2. 呈现核心快捷键指南 (常用、节点样式、节点与层级操作、导航)
+ * 3. 支持 H / Ctrl + / 唤起与切换，按 Esc 或点击关闭按钮平滑收起
  */
 (function (global) {
   'use strict';
 
-  class FeishuShortcutDrawer {
-    constructor() {
+  class MindMapShortcutDrawer {
+    constructor(options = {}) {
+      this.options = options;
+      this.mountContainer = options.container || document.body;
+      this.isActiveCheck = typeof options.isActiveCheck === 'function' ? options.isActiveCheck : null;
       this.isOpen = false;
       this.initDom();
       this.bindEvents();
+      global._mindMapShortcutDrawerInstance = this;
+    }
+
+    isActive() {
+      if (this.isActiveCheck) {
+        return !!this.isActiveCheck();
+      }
+      return true;
     }
 
     initDom() {
-      const existing = document.querySelector('.feishu-shortcut-drawer');
+      const existing = this.mountContainer.querySelector('.mm-shortcut-drawer');
       if (existing) existing.remove();
 
       this.drawerEl = document.createElement('aside');
-      this.drawerEl.className = 'feishu-shortcut-drawer';
+      this.drawerEl.className = 'mm-shortcut-drawer';
       this.drawerEl.innerHTML = `
         <div class="drawer-header">
           <div class="drawer-title" style="font-size: 15px; font-weight: 600; color: #1f2329;">快捷键指南</div>
@@ -50,42 +59,56 @@
             <div class="shortcut-item"><span>下划线</span><kbd>Ctrl + U</kbd></div>
           </div>
 
-          <!-- 节点操作 -->
+          <!-- 节点与层级操作 -->
           <div class="shortcut-section">
-            <div class="shortcut-section-title">节点操作</div>
-            <div class="shortcut-item"><span>复制节点</span><kbd>Ctrl + C</kbd></div>
-            <div class="shortcut-item"><span>剪切节点</span><kbd>Ctrl + X</kbd></div>
-            <div class="shortcut-item"><span>粘贴节点</span><kbd>Ctrl + V</kbd></div>
-            <div class="shortcut-item"><span>创建节点副本</span><kbd>Ctrl + D</kbd></div>
+            <div class="shortcut-section-title">层级与分类展开</div>
+            <div class="shortcut-item"><span>全量展开知识点</span><kbd>Q</kbd></div>
+            <div class="shortcut-item"><span>全量展开核心考点</span><kbd>W</kbd></div>
+            <div class="shortcut-item"><span>全量展开解题方法</span><kbd>E</kbd></div>
+            <div class="shortcut-item"><span>三柱总览 (展开至3级)</span><kbd>1</kbd></div>
+            <div class="shortcut-item"><span>微观要点 (展开至4级)</span><kbd>2</kbd></div>
+            <div class="shortcut-item"><span>深度展开 (展开至5级)</span><kbd>3</kbd></div>
+            <div class="shortcut-item"><span>展开全部节点</span><kbd>0</kbd></div>
             <div class="shortcut-item"><span>展开/折叠当前节点</span><kbd>Alt + .</kbd></div>
-            <div class="shortcut-item"><span>全部展开/全部折叠</span><kbd>Alt + Shift + .</kbd></div>
+            <div class="shortcut-item"><span>复制 / 创建副本</span><kbd>Ctrl + C / Ctrl + D</kbd></div>
           </div>
 
-          <!-- 导航 -->
+          <!-- 导航与视图 -->
           <div class="shortcut-section">
-            <div class="shortcut-section-title">导航</div>
-            <div class="shortcut-item"><span>画布放大</span><kbd>Ctrl + +</kbd></div>
-            <div class="shortcut-item"><span>画布缩小</span><kbd>Ctrl + -</kbd></div>
+            <div class="shortcut-section-title">导航与视图</div>
+            <div class="shortcut-item"><span>光标为中心平滑缩放</span><kbd>鼠标滚轮</kbd></div>
+            <div class="shortcut-item"><span>平移漫游画布</span><kbd>右键拖拽</kbd></div>
+            <div class="shortcut-item"><span>开关关联线 (默认开)</span><kbd>L</kbd></div>
+            <div class="shortcut-item"><span>退出认知视图</span><kbd>O / Esc</kbd></div>
             <div class="shortcut-item"><span>进入当前节点 (聚焦)</span><kbd>Ctrl + ]</kbd></div>
             <div class="shortcut-item"><span>返回上一级节点</span><kbd>Ctrl + [</kbd></div>
             <div class="shortcut-item"><span>视图切换 (大纲/导图)</span><kbd>M</kbd></div>
-            <div class="shortcut-item"><span>快捷键面板</span><kbd>H / Ctrl + /</kbd></div>
+            <div class="shortcut-item"><span>快捷键面板 (点击画布收起)</span><kbd>H</kbd></div>
           </div>
         </div>
       `;
 
-      document.body.appendChild(this.drawerEl);
+      this.mountContainer.appendChild(this.drawerEl);
       this.closeBtn = this.drawerEl.querySelector('.drawer-close-btn');
     }
 
     bindEvents() {
-      // 点击关闭
+      // 点击关闭按钮
       this.closeBtn.addEventListener('click', () => {
         this.close();
       });
 
+      // 点击抽屉外部（画布、节点、图表等）立即平滑收起抽屉
+      document.addEventListener('pointerdown', (e) => {
+        if (!this.isOpen || !this.isActive()) return;
+        if (this.drawerEl && !this.drawerEl.contains(e.target)) {
+          this.close();
+        }
+      }, true);
+
       // 按 Esc 关闭抽屉
       window.addEventListener('keydown', (e) => {
+        if (!this.isActive()) return;
         if (e.key === 'Escape' && this.isOpen) {
           this.close();
         }
@@ -111,5 +134,5 @@
     }
   }
 
-  global.FeishuShortcutDrawer = FeishuShortcutDrawer;
+  global.MindMapShortcutDrawer = MindMapShortcutDrawer;
 })(typeof window !== 'undefined' ? window : this);

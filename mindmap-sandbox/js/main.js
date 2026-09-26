@@ -14,14 +14,14 @@
     return;
   }
 
-  // 2. 注册飞书经典视觉主题 (Feishu / Lark Design System: 居中直角折线与二级浅灰底色卡片规范)
-  MindMap.defineTheme('feishu', {
+  // 2. 注册现代清晰视觉主题 (居中直角折线与二级浅灰底色卡片规范)
+  MindMap.defineTheme('mindmap_modern', {
     backgroundColor: '#f8f9fa',
-    lineColor: '#3370ff',       // 飞书品牌蓝分支连线
+    lineColor: '#3370ff',       // 品牌蓝分支连线
     lineWidth: 2,
     lineStyle: 'straight',      // 直角折线模式 (包含水平延伸与垂直拐角)
-    lineRadius: 8,              // 折线拐角圆角 8px (复刻飞书圆角折线)
-    nodeUseLineStyle: false,    // 关闭下划线横线模式，使连线精准垂直居中对接 (y = top + height / 2)
+    lineRadius: 8,              // 折线拐角圆角 8px
+    nodeUseLineStyle: false,    // 关闭下划线横线模式，使连线精准垂直居中对接
     root: {
       shape: 'rectangle',
       fillColor: '#3370ff',
@@ -37,9 +37,9 @@
     },
     second: {
       shape: 'rectangle',
-      marginX: 80,
-      marginY: 24,
-      fillColor: '#eff0f1',     // 飞书二级节点专属浅灰底色卡片
+      marginX: 64,
+      marginY: 18,
+      fillColor: '#eff0f1',     // 二级节点专属浅灰底色卡片
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
       color: '#1f2329',
       fontSize: 14,
@@ -48,13 +48,13 @@
       borderWidth: 0,
       borderRadius: 6,
       hoverRectColor: '#3370ff',
-      paddingX: 16,
-      paddingY: 8
+      paddingX: 14,
+      paddingY: 7
     },
     node: {
       shape: 'rectangle',
-      marginX: 50,
-      marginY: 16,
+      marginX: 42,
+      marginY: 10,
       fillColor: 'transparent', // 三级及以上纯文本无底色
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
       color: '#1f2329',
@@ -74,7 +74,7 @@
     el: container,
     data: window.defaultMindMapData || { data: { text: '根节点' }, children: [] },
     layout: 'logicalStructure', // 经典逻辑结构图（向右水平展开）
-    theme: 'feishu',            // 飞书专属商务质感主题
+    theme: 'mindmap_modern',    // 现代商务质感主题
     enableFreeDrag: false,      // 禁用自由散落拖拽，强制树状吸附
     autoMoveWhenMouseInEdgeOnDrag: true, // 拖动靠近视口边缘时自动滚动画布
     useLeftKeySelectionRightKeyDrag: true, // 空白处左键框选，右键拖拽平移画布
@@ -86,8 +86,8 @@
     dragPlaceholderRectFill: 'rgba(51, 112, 255, 0.15)',
     isUseCustomNodeContent: true,
     customCreateNodeContent: (node) => {
-      if (window.FeishuNodeRenderer) {
-        return window.FeishuNodeRenderer.render(node);
+      if (window.MindMapNodeRenderer) {
+        return window.MindMapNodeRenderer.render(node);
       }
       return null;
     }
@@ -96,26 +96,26 @@
   // 4. 全局暴露实例供测试脚本与调试使用
   window._mindMapInstance = mindMap;
 
-  // 5. 初始化飞书磁吸拖拽增强器与原位编辑器
-  if (window.FeishuDragEnhancer) {
-    window._feishuDragEnhancer = window._feishuDragEnhancerInstance = new window.FeishuDragEnhancer(mindMap);
-    console.log('[Mindmap Sandbox] 飞书磁吸拖拽增强器已挂载并激活');
+  // 5. 初始化磁吸拖拽增强器与原位编辑器
+  if (window.MindMapDragEnhancer) {
+    window._mindMapDragEnhancer = window._mindMapDragEnhancerInstance = new window.MindMapDragEnhancer(mindMap);
+    console.log('[Mindmap Sandbox] 磁吸拖拽增强器已挂载并激活');
   }
 
-  if (window.FeishuNodeEditor) {
-    window._feishuNodeEditorInstance = new window.FeishuNodeEditor(mindMap);
-    console.log('[Mindmap Sandbox] 飞书导图原位编辑与实时悬浮预览胶囊已激活');
+  if (window.MindMapNodeEditor) {
+    window._mindMapNodeEditorInstance = new window.MindMapNodeEditor(mindMap);
+    console.log('[Mindmap Sandbox] 导图原位编辑与实时悬浮预览胶囊已激活');
   }
 
-  // 6. 初始化飞书大纲引擎与双向视图控制器
+  // 6. 初始化大纲引擎与双向视图控制器
   const outlinerContainer = document.getElementById('outlinerContainer');
   let outliner = null;
   let dualViewController = null;
 
-  if (window.FeishuOutliner && outlinerContainer) {
-    outliner = new window.FeishuOutliner(outlinerContainer);
+  if (window.MindMapOutliner && outlinerContainer) {
+    outliner = new window.MindMapOutliner(outlinerContainer);
     window._outlinerInstance = outliner;
-    console.log('[Mindmap Sandbox] 飞书大纲引擎已初始化');
+    console.log('[Mindmap Sandbox] 大纲引擎已初始化');
   }
 
   if (window.DualViewController && outliner) {
@@ -123,35 +123,36 @@
       defaultView: 'mindmap'
     });
     window._dualViewControllerInstance = dualViewController;
-    console.log('[Mindmap Sandbox] 飞书双向视图控制器已挂载并激活');
+    console.log('[Mindmap Sandbox] 双向视图控制器已挂载并激活');
   }
 
-  // 7. 初始化飞书快捷键指南抽屉、底部固定工具条与全局快捷键管理器
+  // 7. 初始化快捷键指南抽屉、底部固定工具条与全局快捷键管理器
   let shortcutDrawer = null;
-  if (window.FeishuShortcutDrawer) {
-    shortcutDrawer = new window.FeishuShortcutDrawer();
-    window._feishuShortcutDrawerInstance = shortcutDrawer;
-    console.log('[Mindmap Sandbox] 飞书快捷键指南抽屉已就绪');
+  if (window.MindMapShortcutDrawer) {
+    shortcutDrawer = new window.MindMapShortcutDrawer();
+    window._mindMapShortcutDrawerInstance = shortcutDrawer;
+    console.log('[Mindmap Sandbox] 快捷键指南抽屉已就绪');
   }
 
-  if (window.FeishuBottomToolbar) {
-    window._feishuBottomToolbarInstance = new window.FeishuBottomToolbar(mindMap, {
+  if (window.MindMapBottomToolbar) {
+    window._mindMapBottomToolbarInstance = new window.MindMapBottomToolbar(mindMap, {
       shortcutDrawer: shortcutDrawer
     });
-    console.log('[Mindmap Sandbox] 飞书底部固定深色工具条已挂载并就绪');
+    console.log('[Mindmap Sandbox] 底部固定深色工具条已挂载并就绪');
   }
 
-  if (window.FeishuShortcutManager) {
-    window._feishuShortcutManagerInstance = new window.FeishuShortcutManager(mindMap, {
-      shortcutDrawer: shortcutDrawer
+  if (window.MindMapShortcutManager) {
+    window._mindMapShortcutManagerInstance = new window.MindMapShortcutManager(mindMap, {
+      shortcutDrawer: shortcutDrawer,
+      outliner: outliner
     });
-    console.log('[Mindmap Sandbox] 飞书全局快捷键交互管理器已挂载并激活');
+    console.log('[Mindmap Sandbox] 全局快捷键交互管理器已挂载并激活');
   }
 
-  // 8. 初始化飞书左下角结构与分支线搭配控制器
-  if (window.FeishuStructureController) {
-    window._feishuStructureController = window._feishuStructureControllerInstance = new window.FeishuStructureController(mindMap);
-    console.log('[Mindmap Sandbox] 飞书结构与分支线搭配控制器已挂载并激活');
+  // 8. 初始化左下角结构与分支线搭配控制器
+  if (window.MindMapStructureController) {
+    window._mindMapStructureController = window._mindMapStructureControllerInstance = new window.MindMapStructureController(mindMap);
+    console.log('[Mindmap Sandbox] 结构与分支线搭配控制器已挂载并激活');
   }
 
   // 9. 视口大小自适应监听
@@ -159,7 +160,7 @@
     mindMap.resize();
   });
 
-  // 5. 缩放比例文本显示联动
+  // 10. 缩放比例文本显示联动
   const zoomText = document.getElementById('zoomLevelText');
   function updateZoomDisplay() {
     if (!zoomText || !mindMap.view) return;
@@ -172,7 +173,7 @@
   mindMap.on('view_data_change', updateZoomDisplay);
   mindMap.on('node_tree_render_end', updateZoomDisplay);
 
-  // 6. 顶部悬浮控制栏原生命令绑定
+  // 11. 顶部悬浮控制栏原生命令绑定
   const btnInsertChild = document.getElementById('btnInsertChild');
   const btnInsertSibling = document.getElementById('btnInsertSibling');
   const btnDeleteNode = document.getElementById('btnDeleteNode');
@@ -232,8 +233,8 @@
 
   if (btnExpandAll) {
     btnExpandAll.addEventListener('click', () => {
-      if (window._feishuShortcutManagerInstance) {
-        window._feishuShortcutManagerInstance.expandAll();
+      if (window._mindMapShortcutManagerInstance) {
+        window._mindMapShortcutManagerInstance.expandAll();
       } else {
         mindMap.execCommand('EXPAND_ALL');
       }
@@ -242,8 +243,8 @@
 
   if (btnCollapseAll) {
     btnCollapseAll.addEventListener('click', () => {
-      if (window._feishuShortcutManagerInstance) {
-        window._feishuShortcutManagerInstance.collapseAll();
+      if (window._mindMapShortcutManagerInstance) {
+        window._mindMapShortcutManagerInstance.collapseAll();
       } else {
         mindMap.execCommand('UNEXPAND_ALL');
       }
@@ -264,7 +265,7 @@
     });
   }
 
-  // 7. 导出与导入纯文本导图数据
+  // 12. 导出与导入纯文本导图数据
   const btnExportJson = document.getElementById('btnExportJson');
   const btnImportJson = document.getElementById('btnImportJson');
   const importFileInput = document.getElementById('importFileInput');
