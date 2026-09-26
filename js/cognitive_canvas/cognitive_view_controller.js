@@ -299,6 +299,16 @@
       if (validEdges.length === 0) return;
 
       var rootCenterX = tree.left + tree.width / 2;
+      var rootCenterY = tree.top + tree.height / 2;
+
+      // 计算中央核心禁区（覆盖中央根节点与紧邻的一级知识主干节点），防止跨翼连线横穿中央根节点
+      var branchKnowledgeNode = idToNode.get('branch_knowledge');
+      var centralLeft = (branchKnowledgeNode ? Math.min(tree.left, branchKnowledgeNode.left) : tree.left) - 18;
+      var centralRight = tree.left + tree.width + 22;
+      var centralTop = (branchKnowledgeNode ? Math.min(tree.top, branchKnowledgeNode.top) : tree.top) - 22;
+      var centralBottom = (branchKnowledgeNode
+        ? Math.max(tree.top + tree.height, branchKnowledgeNode.top + branchKnowledgeNode.height)
+        : (tree.top + tree.height)) + 22;
 
       // 1. 多端口锚点分配 (Multi-Port Anchor Distribution)
       var nodePortsMap = new Map();
@@ -332,9 +342,11 @@
         });
       });
 
-      // 2. 统计同翼垂直弧线层级次序，用于立交桥外扩分流 (Stepped Arc Width)
-      var sameWingRank = 0;
-      var self = this;
+      // 2. 预计算每条边的端点与分类（右翼同侧 / 左翼同侧 / 跨翼上方走廊 / 跨翼下方走廊）以分配无冲突立交车道
+      var rightWingEdges = [];
+      var leftWingEdges = [];
+      var crossUpperEdges = [];
+      var crossLowerEdges = [];
 
       validEdges.forEach(function (edge) {
         var fromNode = edge.fromNode;
@@ -350,51 +362,148 @@
         var fromOffset = portOffsetMap.get(fromUid + '->' + toUid + ':from') || 0;
         var toOffset = portOffsetMap.get(fromUid + '->' + toUid + ':to') || 0;
 
-        var startX, startY, endX, endY, cx1, cy1, cx2, cy2;
-
-        startY = fromNode.top + fromNode.height / 2 + fromOffset;
-        endY = toNode.top + toNode.height / 2 + toOffset;
+        edge.startY = fromNode.top + fromNode.height / 2 + fromOffset;
+        edge.endY = toNode.top + toNode.height / 2 + toOffset;
+        edge.fromIsLeft = fromIsLeft;
+        edge.toIsLeft = toIsLeft;
+        edge.dy = Math.abs(edge.startY - edge.endY);
+        edge.midY = (edge.startY + edge.endY) / 2;
 
         if (!fromIsLeft && !toIsLeft) {
-          // 同在右翼（例如考点 kp -> 招法 m）：从卡片左边框连接，向左侧中轴走廊弧形外扩
+          rightWingEdges.push(edge);
+        } else if (fromIsLeft && toIsLeft) {
+          leftWingEdges.push(edge);
+        } else {
+          if (edge.midY <= rootCenterY) {
+            crossUpperEdges.push(edge);
+          } else {
+            crossLowerEdges.push(edge);
+          }
+        }
+      });
+
+      // 同翼边按纵向跨度从小到大排序：短跨度在内侧、长跨度在外侧，减少交叉
+      rightWingEdges.sort(function (a, b) { return a.dy - b.dy; });
+      rightWingEdges.forEach(function (e, idx) { e.wingRank = idx; });
+
+      leftWingEdges.sort(function (a, b) { return a.dy - b.dy; });
+      leftWingEdges.forEach(function (e, idx) { e.wingRank = idx; });
+
+      // 跨翼上方走廊：平均高度越靠近根节点中心，分配越靠近内侧的走廊车道
+      crossUpperEdges.sort(function (a, b) { return b.midY - a.midY; });
+      crossUpperEdges.forEach(function (e, idx) { e.corridorRank = idx; e.passAbove = true; });
+
+      // 跨翼下方走廊：平均高度越靠近根节点中心，分配越靠近内侧的走廊车道
+      crossLowerEdges.sort(function (a, b) { return a.midY - b.midY; });
+      crossLowerEdges.forEach(function (e, idx) { e.corridorRank = idx; e.passAbove = false; });
+
+      var self = this;
+
+      validEdges.forEach(function (edge) {
+        var fromNode = edge.fromNode;
+        var toNode = edge.toNode;
+        var fromUid = edge.fromUid;
+        var toUid = edge.toUid;
+        var fromIsLeft = edge.fromIsLeft;
+        var toIsLeft = edge.toIsLeft;
+
+        var startX, startY, endX, endY, cx1, cy1, cx2, cy2;
+
+        startY = edge.startY;
+        endY = edge.endY;
+
+        if (!fromIsLeft && !toIsLeft) {
+          // 同在右翼（例如考点 kp -> 招法 m）：从卡片左边框连接，向左侧走廊紧凑外扩，且绝不侵入中央根节点
           startX = fromNode.left;
           endX = toNode.left;
-          var dy = Math.abs(startY - endY);
-          var laneWidth = Math.max(32, dy * 0.22) + (sameWingRank % 6) * 12;
-          sameWingRank++;
-          cx1 = Math.min(startX, endX) - laneWidth;
+          var rankR = edge.wingRank || 0;
+          var laneWidth = Math.min(110, Math.max(24, edge.dy * 0.14) + rankR * 8);
+          var minAllowedCx = centralRight + 14;
+          cx1 = Math.max(minAllowedCx, Math.min(startX, endX) - laneWidth);
           cy1 = startY;
           cx2 = cx1;
           cy2 = endY;
         } else if (fromIsLeft && toIsLeft) {
-          // 同在左翼：从卡片右边框连接，向右侧中轴走廊弧形外扩
+          // 同在左翼：从卡片右边框连接，向右侧走廊紧凑外扩，且绝不侵入中央禁区
           startX = fromNode.left + fromNode.width;
           endX = toNode.left + toNode.width;
-          var dyLeft = Math.abs(startY - endY);
-          var laneWidthLeft = Math.max(32, dyLeft * 0.22) + (sameWingRank % 6) * 12;
-          sameWingRank++;
-          cx1 = Math.max(startX, endX) + laneWidthLeft;
+          var rankL = edge.wingRank || 0;
+          var laneWidthLeft = Math.min(110, Math.max(24, edge.dy * 0.14) + rankL * 8);
+          var maxAllowedCx = centralLeft - 14;
+          cx1 = Math.min(maxAllowedCx, Math.max(startX, endX) + laneWidthLeft);
           cy1 = startY;
           cx2 = cx1;
           cy2 = endY;
-        } else if (!fromIsLeft && toIsLeft) {
-          // 跨翼连接 (右 -> 左)：从源节点左边缘连到目标节点右边缘
-          startX = fromNode.left;
-          endX = toNode.left + toNode.width;
-          var dx = Math.abs(startX - endX);
-          cx1 = startX - dx * 0.45;
-          cy1 = startY;
-          cx2 = endX + dx * 0.45;
-          cy2 = endY;
         } else {
-          // 跨翼连接 (左 -> 右)：从源节点右边缘连到目标节点左边缘
-          startX = fromNode.left + fromNode.width;
-          endX = toNode.left;
-          var dxRight = Math.abs(endX - startX);
-          cx1 = startX + dxRight * 0.45;
+          // 跨翼连接 (左翼 <-> 右翼)：绕行中央根节点上/下方立交走廊
+          if (!fromIsLeft && toIsLeft) {
+            startX = fromNode.left;
+            endX = toNode.left + toNode.width;
+          } else {
+            startX = fromNode.left + fromNode.width;
+            endX = toNode.left;
+          }
+
+          var spanX = endX - startX;
+          cx1 = startX + spanX * 0.38;
+          cx2 = startX + spanX * 0.62;
           cy1 = startY;
-          cx2 = endX - dxRight * 0.45;
           cy2 = endY;
+
+          var cRank = edge.corridorRank || 0;
+          var laneGap = 12;
+
+          if (edge.passAbove) {
+            var targetTop = centralTop - cRank * laneGap;
+            var requiredControlY = Infinity;
+            var hitsCentralX = false;
+            for (var step = 1; step < 20; step++) {
+              var t = step / 20;
+              var mt = 1 - t;
+              var xt = mt * mt * mt * startX + 3 * mt * mt * t * cx1 + 3 * mt * t * t * cx2 + t * t * t * endX;
+              if (xt >= centralLeft && xt <= centralRight) {
+                hitsCentralX = true;
+                var baseYt = mt * mt * mt * startY + t * t * t * endY;
+                var wt = 3 * mt * t;
+                var boundY = (targetTop - baseYt) / wt;
+                if (boundY < requiredControlY) {
+                  requiredControlY = boundY;
+                }
+              }
+            }
+            if (hitsCentralX && isFinite(requiredControlY)) {
+              var naturalCy = (startY + endY) / 2;
+              if (requiredControlY < naturalCy) {
+                cy1 = requiredControlY;
+                cy2 = requiredControlY;
+              }
+            }
+          } else {
+            var targetBottom = centralBottom + cRank * laneGap;
+            var requiredControlYBottom = -Infinity;
+            var hitsCentralXBottom = false;
+            for (var stepB = 1; stepB < 20; stepB++) {
+              var tB = stepB / 20;
+              var mtB = 1 - tB;
+              var xtB = mtB * mtB * mtB * startX + 3 * mtB * mtB * tB * cx1 + 3 * mtB * tB * tB * cx2 + tB * tB * tB * endX;
+              if (xtB >= centralLeft && xtB <= centralRight) {
+                hitsCentralXBottom = true;
+                var baseYtB = mtB * mtB * mtB * startY + tB * tB * tB * endY;
+                var wtB = 3 * mtB * tB;
+                var boundYB = (targetBottom - baseYtB) / wtB;
+                if (boundYB > requiredControlYBottom) {
+                  requiredControlYBottom = boundYB;
+                }
+              }
+            }
+            if (hitsCentralXBottom && isFinite(requiredControlYBottom)) {
+              var naturalCyB = (startY + endY) / 2;
+              if (requiredControlYBottom > naturalCyB) {
+                cy1 = requiredControlYBottom;
+                cy2 = requiredControlYBottom;
+              }
+            }
+          }
         }
 
         var pathStr = 'M ' + startX.toFixed(1) + ' ' + startY.toFixed(1) +
