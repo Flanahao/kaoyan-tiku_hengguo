@@ -1,0 +1,283 @@
+/**
+ * 考研数学认知视图 · 样式规范 (Cognitive View Stylesheet)
+ * 全屏独立认知画布、紧凑树状节点、共鸣高亮光晕、按需几何动图浮层。
+ */
+
+/* ─────────────────────────────────────────────────────────────
+   1. 认知画布全屏工作台 (Cognitive Canvas Fullscreen Layout)
+   ───────────────────────────────────────────────────────────── */
+.cognitive-app-layout,
+.cognitive-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: #f8f9fa;
+  z-index: 11000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.cognitive-app-layout.show,
+.cognitive-modal-backdrop.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#cognitiveMindMapContainer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  outline: none;
+  touch-action: none;
+  overscroll-behavior: none;
+  z-index: 1;
+  background-color: #f8f9fa;
+  background-image: radial-gradient(#dcdfe6 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+#cognitiveMindMapContainer foreignObject {
+  overflow: visible !important;
+}
+
+#cognitiveMindMapContainer foreignObject > div:not(.mm-node-card),
+#cognitiveMindMapContainer foreignObject p {
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  line-height: inherit !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   2. MathViz 按需几何图解悬浮卡片 (Floating Popover)
+   ───────────────────────────────────────────────────────────── */
+.mathviz-floating-popover {
+  position: fixed;
+  z-index: 12000;
+  width: 368px;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid #dee0e3;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(31, 35, 41, 0.16);
+  padding: 12px 14px;
+  animation: popoverFadeIn 0.16s cubic-bezier(0, 0, 0.2, 1);
+}
+
+.mathviz-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #eff0f1;
+}
+
+.mathviz-popover-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2329;
+}
+
+.mathviz-popover-close {
+  background: transparent;
+  border: none;
+  color: #8f959e;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.mathviz-popover-close:hover {
+  background: #f2f3f5;
+  color: #1f2329;
+}
+
+.mathviz-widget {
+  background-color: #fcfcfd;
+  border: 1px solid #e5e6eb;
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.mathviz-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.mathviz-tab-btn {
+  border: 1px solid #d0d3d6;
+  background-color: #ffffff;
+  color: #4e5969;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mathviz-tab-btn.active {
+  background-color: #3370ff;
+  border-color: #3370ff;
+  color: #ffffff;
+}
+
+.mathviz-svg-container {
+  width: 100%;
+  background-color: #ffffff;
+  border: 1px solid #f2f3f5;
+  border-radius: 4px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.mathviz-caption {
+  font-size: 11px;
+  color: #646a73;
+  line-height: 1.45;
+  margin-top: 6px;
+}
+
+.mathviz-header-info {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1f2329;
+  margin-bottom: 6px;
+}
+
+.mathviz-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #4e5969;
+}
+
+.mathviz-slider {
+  flex: 1;
+  height: 4px;
+  accent-color: #3370ff;
+  cursor: pointer;
+}
+
+.mathviz-readout {
+  font-family: Consolas, monospace;
+  font-size: 11px;
+  color: #1f2329;
+  font-weight: 600;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   3. Focus Resonance (跨分支拓扑共鸣聚焦高亮与非关联节点弱化)
+   ───────────────────────────────────────────────────────────── */
+.mm-node-card.resonance-active {
+  background: #e8f3ff !important;
+  outline: 2px solid #3370ff !important;
+  box-shadow: 0 4px 16px rgba(51, 112, 255, 0.25) !important;
+  border-radius: 6px !important;
+}
+
+.mm-node-card.resonance-linked {
+  background: #e8ffea !important;
+  outline: 2px solid #00b42a !important;
+  box-shadow: 0 4px 14px rgba(0, 180, 42, 0.2) !important;
+  border-radius: 6px !important;
+}
+
+.smm-node-container.has-resonance-focus .smm-node:not(.is-in-resonance) .mm-node-card {
+  opacity: 0.58 !important; /* 调优透明度：降低过度透明，确保周边背景文字清晰可辨 */
+  transition: opacity 0.2s ease;
+}
+
+.smm-node-container.has-resonance-focus .smm-node.is-in-resonance .mm-node-card {
+  opacity: 1 !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   4. 关联线视觉净化 (清除箭头，展示优雅平滑贝塞尔曲线)
+   ───────────────────────────────────────────────────────────── */
+#cognitiveMindMapContainer marker,
+#cognitiveMindMapContainer .smm-line-container marker,
+#cognitiveMindMapContainer .smm-svg-container marker {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+#cognitiveMindMapContainer path {
+  marker-end: none !important;
+  marker-start: none !important;
+}
+
+#cognitiveMindMapContainer text.smm-associative-line-text {
+  display: none !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   5. SimpleMindMap 原生关联线 (AssociativeLine Container)
+   ───────────────────────────────────────────────────────────── */
+.smm-associative-line-container {
+  transition: opacity 0.2s ease;
+}
+
+.smm-associative-line-container path {
+  stroke-dasharray: none !important; /* 彻底实线化，杜绝虚线杂乱 */
+  transition: stroke-width 0.18s ease, stroke 0.18s ease, opacity 0.18s ease;
+  pointer-events: none !important;
+}
+
+/* L 键常态隐藏状态下，普通连线静音不可见，仅当激活时透出高亮实线 */
+.smm-associative-line-container.is-global-muted path:not(.is-active-line) {
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+.smm-associative-line-container.is-global-muted path.is-active-line {
+  opacity: 1 !important;
+  visibility: visible !important;
+  stroke: #3370ff !important;
+  stroke-width: 2.4px !important;
+}
+
+/* 常态显示状态下的层级区分 */
+.smm-associative-line-container:not(.is-global-muted) path {
+  opacity: 0.65;
+  stroke: #3370ff;
+  stroke-width: 1.6px;
+}
+
+.smm-associative-line-container:not(.is-global-muted).has-active-selection path:not(.is-active-line) {
+  opacity: 0.18 !important;
+}
+
+.smm-associative-line-container:not(.is-global-muted) path.is-active-line {
+  opacity: 1 !important;
+  stroke: #3370ff !important;
+  stroke-width: 2.4px !important;
+  filter: drop-shadow(0 2px 6px rgba(51, 112, 255, 0.45));
+}
+
+/* 彻底隐匿 SimpleMindMap 默认曲线编辑控制线与圆圈手柄，消除点击弹出两段水平线与圆圈 */
+.smm-associative-line-container .control-line,
+.smm-associative-line-container circle,
+#cognitiveMindMapContainer .smm-associative-line-container circle {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
