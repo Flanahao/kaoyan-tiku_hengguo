@@ -229,6 +229,11 @@
     if (!AssociativeLineProto || AssociativeLineProto._hasCognitiveEnhancement) return;
     AssociativeLineProto._hasCognitiveEnhancement = true;
 
+    AssociativeLineProto.onNodeClick = function () {
+      if (this.isCreatingLine) return;
+      this.clearActiveLine();
+    };
+
     AssociativeLineProto.removeAllLines = function () {
       (this.lineList || []).forEach(function (line) {
         if (line[0] && typeof line[0].remove === 'function') line[0].remove();
@@ -752,6 +757,22 @@
       }
     });
 
+    // 节点点击：若该节点存在关联线（无论当前 L 键处于显示还是隐藏状态），点击节点即刻高亮显示其关联线；若无关联线则清除聚焦
+    mindMapInstance.on('node_click', function (node) {
+      if (!node || typeof node.getData !== 'function') return;
+      var uid = node.getData('uid');
+      if (!uid) {
+        clearFocusResonance();
+        return;
+      }
+      var targets = getTargetsByUid(uid);
+      if (Array.isArray(targets) && targets.length > 0) {
+        applyFocusResonanceByUid(uid);
+      } else {
+        clearFocusResonance();
+      }
+    });
+
     // 视口平移与缩放后，实时同步关联线高亮与隐现状态
     mindMapInstance.on('view_after_render', function () {
       syncAssociativeLinesState();
@@ -779,6 +800,7 @@
       installAssociativeLineEnhancer(alProto);
       mindMapInstance.associativeLine.renderAllLines = alProto.renderAllLines.bind(mindMapInstance.associativeLine);
       mindMapInstance.associativeLine.removeAllLines = alProto.removeAllLines.bind(mindMapInstance.associativeLine);
+      mindMapInstance.associativeLine.onNodeClick = alProto.onNodeClick.bind(mindMapInstance.associativeLine);
       mindMapInstance.associativeLine.renderAllLines();
     }
 
@@ -871,7 +893,7 @@
     return kp ? (kp.associativeLineTargets || []) : [];
   }
 
-  // 递归展开所有目标节点的祖先分支，保证折叠状态下的目标卡片亦可挂载且关联线即刻连通
+  // 递归展开所有目标节点的祖先分支（不展开目标节点自身的叶子子项），保证折叠状态下的目标卡片挂载且关联线即刻连通
   function ensureNodesExpanded(targetUids, callback) {
     if (!mindMapInstance || !targetUids || targetUids.length === 0) {
       if (callback) callback();
@@ -888,23 +910,21 @@
 
     function markAncestors(node) {
       if (!node) return false;
-      var hasTarget = false;
       var curUid = (node.data && node.data.uid) || '';
-      if (uidSet.has(curUid)) {
-        hasTarget = true;
-      }
+      var isSelfTarget = uidSet.has(curUid);
+      var hasDescendantTarget = false;
       if (Array.isArray(node.children)) {
         for (var i = 0; i < node.children.length; i++) {
           if (markAncestors(node.children[i])) {
-            hasTarget = true;
+            hasDescendantTarget = true;
           }
         }
       }
-      if (hasTarget && node.data && node.data.expand === false) {
+      if (hasDescendantTarget && node.data && node.data.expand === false) {
         node.data.expand = true;
         modified = true;
       }
-      return hasTarget;
+      return isSelfTarget || hasDescendantTarget;
     }
 
     markAncestors(treeData);
@@ -947,10 +967,15 @@
       lineContainer.classList.remove('is-global-muted');
     }
 
-    var paths = lineContainer.querySelectorAll('.smm-associative-line-path, .smm-associative-line-click-path');
+    var visiblePaths = lineContainer.querySelectorAll('.smm-associative-line-path');
+    var clickPaths = lineContainer.querySelectorAll('.smm-associative-line-click-path');
+    clickPaths.forEach(function (cp) {
+      cp.classList.remove('is-active-line');
+    });
+
     if (!activeResonanceUid) {
       lineContainer.classList.remove('has-active-selection');
-      paths.forEach(function (p) {
+      visiblePaths.forEach(function (p) {
         p.classList.remove('is-active-line');
       });
       return;
@@ -960,12 +985,13 @@
     var targets = getTargetsByUid(activeResonanceUid);
     var targetSet = new Set(targets);
 
-    paths.forEach(function (p) {
+    visiblePaths.forEach(function (p) {
       var from = p.getAttribute('data-from-uid');
       var to = p.getAttribute('data-to-uid');
       var isConnected = (from === activeResonanceUid && targetSet.has(to)) ||
-                        (to === activeResonanceUid) ||
-                        (from === activeResonanceUid);
+                        (to === activeResonanceUid && targetSet.has(from)) ||
+                        (from === activeResonanceUid) ||
+                        (to === activeResonanceUid);
       if (isConnected) {
         p.classList.add('is-active-line');
       } else {
@@ -1014,13 +1040,23 @@
   }
 
   function applyFocusResonanceByUid(uid) {
-    if (!mindMapInstance) return;
+    if (!mindMapInstance || !uid) return;
     activeResonanceUid = uid;
 
     var targets = getTargetsByUid(uid);
-    ensureNodesExpanded(targets, function () {
+    var nodesToEnsure = [uid].concat(targets);
+    ensureNodesExpanded(nodesToEnsure, function () {
       executeResonanceHighlight(uid, targets);
     });
+  }
+
+  function toggleFocusResonanceByUid(uid) {
+    if (!mindMapInstance || !uid) return;
+    if (activeResonanceUid === uid) {
+      clearFocusResonance();
+    } else {
+      applyFocusResonanceByUid(uid);
+    }
   }
 
   function clearFocusResonance() {
@@ -1300,6 +1336,7 @@
     expandToLevel: expandToLevel,
     expandAll: expandAll,
     applyFocusResonanceByUid: applyFocusResonanceByUid,
+    toggleFocusResonanceByUid: toggleFocusResonanceByUid,
     clearFocusResonance: clearFocusResonance,
     jumpToExamPointQuestions: jumpToExamPointQuestions,
     toggleAssociativeLines: toggleAssociativeLines,

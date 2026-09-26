@@ -285,7 +285,7 @@ async function runTests() {
           (kp01Rect.left >= rootCenterX - 50) &&
           (m01Rect.left >= rootCenterX - 50);
 
-        const nexusLines = Array.from(document.querySelectorAll('#cognitiveMindMapContainer .smm-associative-line-container path'));
+        const nexusLines = Array.from(document.querySelectorAll('#cognitiveMindMapContainer .smm-associative-line-container path.smm-associative-line-path'));
         const firstLine = nexusLines[0];
         const lineDasharray = firstLine ? window.getComputedStyle(firstLine).strokeDasharray : '';
         const lineIsSolid = !lineDasharray || lineDasharray === 'none';
@@ -364,9 +364,9 @@ async function runTests() {
     await captureScreenshot(ws, 'chapter1_overview_level2.png');
 
     // ─────────────────────────────────────────────────────────────
-    // 测试用例 3：展开全部详情 (Level 3/4 紧凑子节点 + 语义前缀标签降噪)
+    // 测试用例 3：展开全部详情 (Level 3/4 紧凑子节点 + 无向关联线去重与根节点绕行校验)
     // ─────────────────────────────────────────────────────────────
-    console.log('\n[Test 3] 校验「展开详情」模式下多层紧凑子节点、语义前缀降噪与公式渲染...');
+    console.log('\n[Test 3] 校验「展开详情」模式下多层紧凑子节点、无向关联线去重及中央根节点零穿越...');
     await evaluate(ws, `window.CognitiveViewController.expandAll()`);
     await sleep(900);
 
@@ -394,6 +394,45 @@ async function runTests() {
           }
         });
 
+        // 校验全量无向关联线去重、标题节点冗余移除及中央根节点零穿越
+        const mm = window.CognitiveViewController.getInstance();
+        const rootNode = mm && mm.renderer ? mm.renderer.root : null;
+        const rootBox = rootNode ? {
+          left: rootNode.left,
+          right: rootNode.left + rootNode.width,
+          top: rootNode.top,
+          bottom: rootNode.top + rootNode.height
+        } : null;
+
+        const visiblePaths = Array.from(document.querySelectorAll('#cognitiveMindMapContainer .smm-associative-line-container path.smm-associative-line-path'));
+        const pairSet = new Set();
+        let duplicatePairCount = 0;
+        let headerLinkCount = 0;
+        let rootCrossingCount = 0;
+        const headerUids = new Set(['branch_knowledge', 'branch_exam_points', 'branch_methods', 'sec_1_func', 'sec_2_limit', 'sec_3_cont']);
+
+        visiblePaths.forEach(p => {
+          const u = p.getAttribute('data-from-uid') || '';
+          const v = p.getAttribute('data-to-uid') || '';
+          const key = u < v ? (u + '<->' + v) : (v + '<->' + u);
+          if (pairSet.has(key)) duplicatePairCount++;
+          pairSet.add(key);
+          if (headerUids.has(u) || headerUids.has(v)) headerLinkCount++;
+
+          if (rootBox && typeof p.getTotalLength === 'function') {
+            const totalLen = p.getTotalLength();
+            let crosses = false;
+            for (let i = 0; i <= 50; i++) {
+              const pt = p.getPointAtLength((i / 50) * totalLen);
+              if (pt.x >= rootBox.left && pt.x <= rootBox.right && pt.y >= rootBox.top && pt.y <= rootBox.bottom) {
+                crosses = true;
+                break;
+              }
+            }
+            if (crosses) rootCrossingCount++;
+          }
+        });
+
         return {
           totalCardCount: allCards.length,
           tagCount: tags.length,
@@ -401,7 +440,12 @@ async function runTests() {
           actionPillCount: actionPills.length,
           vizPillCount: vizPills.length,
           katexCount: katexEls.length,
-          secSubNodeTags
+          secSubNodeTags,
+          totalEdgeCount: visiblePaths.length,
+          uniquePairCount: pairSet.size,
+          duplicatePairCount,
+          headerLinkCount,
+          rootCrossingCount
         };
       })()
     `);
@@ -411,6 +455,7 @@ async function runTests() {
     console.log(`  - 二级知识点节点彩标数量 (应为0纯净化): ${expandedStats.secSubNodeTags} 处`);
     console.log(`  - 尾部交互胶囊数: 真题=${expandedStats.actionPillCount}, 几何图解=${expandedStats.vizPillCount}`);
     console.log(`  - 节点内 KaTeX 数学公式数: ${expandedStats.katexCount} 处`);
+    console.log(`  - 全量无向关联线: 总数=${expandedStats.totalEdgeCount}, 唯一无向对=${expandedStats.uniquePairCount}, 重复边=${expandedStats.duplicatePairCount}, 标题冗余边=${expandedStats.headerLinkCount}, 穿越中央根节点边数=${expandedStats.rootCrossingCount}`);
 
     if (expandedStats.totalCardCount < 45 || expandedStats.tagCount < 20 || expandedStats.katexCount < 15) {
       throw new Error('全展开模式下紧凑子节点或语义标签/公式数量不足');
@@ -418,12 +463,18 @@ async function runTests() {
     if (expandedStats.secSubNodeTags > 0) {
       throw new Error('二级知识点节点未能完全移除五颜六色的标签噪声');
     }
-    console.log('  PASS: 二级知识点无杂音纯净渲染，叶子层级精准承载语义标签与 KaTeX 公式');
+    if (expandedStats.duplicatePairCount > 0 || expandedStats.headerLinkCount > 0 || expandedStats.totalEdgeCount !== 19) {
+      throw new Error(`无向关联线去重或标题冗余清理异常: total=${expandedStats.totalEdgeCount}, dup=${expandedStats.duplicatePairCount}, header=${expandedStats.headerLinkCount}`);
+    }
+    if (expandedStats.rootCrossingCount > 0) {
+      throw new Error(`存在 ${expandedStats.rootCrossingCount} 条关联线横穿中央根节点`);
+    }
+    console.log('  PASS: 二级知识点纯净渲染、19条无向关联线零重复、零标题冗余且100%绕开中央根节点');
 
     await captureScreenshot(ws, 'chapter1_expanded_subnodes.png');
 
     // 切回一览全局以测拓扑聚焦与几何弹窗
-    await evaluate(ws, `window.CognitiveViewController.expandToLevel(2)`);
+    await evaluate(ws, `window.CognitiveViewController.expandToLevel(1)`);
     await sleep(600);
 
     // ─────────────────────────────────────────────────────────────
@@ -439,7 +490,7 @@ async function runTests() {
         const hasResonanceClass = container && container.classList.contains('has-resonance-focus');
         const activeCard = document.querySelector('#cognitiveMindMapContainer .mm-node-card.is-in-resonance.resonance-active');
         const linkedCards = Array.from(document.querySelectorAll('#cognitiveMindMapContainer .mm-node-card.is-in-resonance.resonance-linked'));
-        const activePaths = Array.from(document.querySelectorAll('#cognitiveMindMapContainer .smm-associative-line-container path.is-active-line'));
+        const activePaths = Array.from(document.querySelectorAll('#cognitiveMindMapContainer .smm-associative-line-container path.smm-associative-line-path.is-active-line'));
         
         // 校验弱化节点透明度是否为 0.58（调优透明度，避免周边文字过暗不可读）
         const nonResonanceCard = document.querySelector('#cognitiveMindMapContainer .smm-node:not(.is-in-resonance) .mm-node-card');
@@ -449,7 +500,10 @@ async function runTests() {
         const ghostLayer = document.querySelector('#cognitiveMindMapContainer .cognitive-active-lines-layer');
         const hasGhostLines = Boolean(ghostLayer && ghostLayer.children.length > 0);
 
-        const allPaths = Array.from(document.querySelectorAll('#cognitiveMindMapContainer .smm-associative-line-container path'));
+        // 校验聚焦展开仅展开目标节点的祖先 (§2)，而不误展开目标节点自身的叶子子节点
+        const leafExpanded = Boolean(document.querySelector('#cognitiveMindMapContainer [data-node-uid="k_equiv_core_f1"]'));
+
+        const allPaths = Array.from(document.querySelectorAll('#cognitiveMindMapContainer .smm-associative-line-container path.smm-associative-line-path'));
         const pathSample = allPaths.slice(0, 3).map(p => ({
           className: p.className && p.className.baseVal !== undefined ? p.className.baseVal : p.className,
           from: p.getAttribute('data-from-uid'),
@@ -465,17 +519,18 @@ async function runTests() {
           allPathCount: allPaths.length,
           pathSample,
           dimmedOpacity,
-          hasGhostLines
+          hasGhostLines,
+          leafExpanded
         };
       })()
     `);
 
     console.log(`  - 激活考点 UID: ${resonanceState.activeUid}`);
-    console.log(`  - 跨分支关联节点数: ${resonanceState.linkedCount}, 原生高亮关联线数: ${resonanceState.activeLineCount}, 全量连线数: ${resonanceState.allPathCount}`);
-    console.log(`  - 连线样本: ${JSON.stringify(resonanceState.pathSample)}`);
+    console.log(`  - 跨分支关联节点数: ${resonanceState.linkedCount}, 原生高亮关联线数: ${resonanceState.activeLineCount}, 全量可见连线数: ${resonanceState.allPathCount}`);
+    console.log(`  - 目标节点叶子是否误展开 (应为false): ${resonanceState.leafExpanded}`);
     console.log(`  - 背景弱化卡片透明度: ${resonanceState.dimmedOpacity}, 遗留虚线注入层: ${resonanceState.hasGhostLines}`);
-    if (!resonanceState.hasResonanceClass || resonanceState.activeUid !== 'kp_gs01_01' || resonanceState.activeLineCount === 0 || resonanceState.hasGhostLines) {
-      throw new Error('Focus Resonance 聚焦高亮或原生关联线高亮未生效，或存在遗留虚线注入层');
+    if (!resonanceState.hasResonanceClass || resonanceState.activeUid !== 'kp_gs01_01' || resonanceState.activeLineCount !== 5 || resonanceState.hasGhostLines || resonanceState.leafExpanded) {
+      throw new Error(`Focus Resonance 聚焦高亮异常: activeLineCount=${resonanceState.activeLineCount}, leafExpanded=${resonanceState.leafExpanded}`);
     }
     if (resonanceState.dimmedOpacity !== '0.58') {
       throw new Error(`背景弱化卡片透明度异常: expected 0.58, got ${resonanceState.dimmedOpacity}`);
@@ -681,26 +736,80 @@ async function runTests() {
       throw new Error('原生关联线容器缺失或 L 键隐现切换异常');
     }
 
-    // 6. 验证在 L 键静音状态下，点击有关联线的节点依然能够透出实线
-    await evaluate(ws, `window.CognitiveViewController.applyFocusResonanceByUid('kp_gs01_01')`);
-    await sleep(400);
+    // 6. 验证在 L 键静音状态下，直接点击有关联线的节点 (node_click) 能够显示对应关联线
+    await evaluate(ws, `
+      (() => {
+        const mm = window.CognitiveViewController.getInstance();
+        const findNode = (n, uid) => {
+          if (!n) return null;
+          const curUid = (n.getData && n.getData('uid')) || (n.nodeData && n.nodeData.data && n.nodeData.data.uid);
+          if (curUid === uid) return n;
+          for (const c of (n.children || [])) {
+            const f = findNode(c, uid);
+            if (f) return f;
+          }
+          return null;
+        };
+        const kp01Node = findNode(mm.renderer.root, 'kp_gs01_01');
+        if (kp01Node) mm.emit('node_click', kp01Node);
+      })()
+    `);
+    await sleep(450);
 
     const mutedResonanceCheck = await evaluate(ws, `
       (() => {
-        const activeLine = document.querySelector('#cognitiveMindMapContainer .smm-associative-line-container path.is-active-line');
-        const normalLine = document.querySelector('#cognitiveMindMapContainer .smm-associative-line-container path:not(.is-active-line)');
+        const activeLines = Array.from(document.querySelectorAll('#cognitiveMindMapContainer .smm-associative-line-container path.smm-associative-line-path.is-active-line'));
+        const normalLine = document.querySelector('#cognitiveMindMapContainer .smm-associative-line-container path.smm-associative-line-path:not(.is-active-line)');
+        const activeLine = activeLines[0];
         return {
           hasActiveLine: Boolean(activeLine),
+          activeLineCount: activeLines.length,
           activeLineOpacity: activeLine ? window.getComputedStyle(activeLine).opacity : '',
+          activeLineVisibility: activeLine ? window.getComputedStyle(activeLine).visibility : '',
           normalLineOpacity: normalLine ? window.getComputedStyle(normalLine).opacity : ''
         };
       })()
     `);
 
-    console.log(`  - L静音下激活关联线存在: ${mutedResonanceCheck.hasActiveLine}, 激活线透明度: ${mutedResonanceCheck.activeLineOpacity}, 普通线透明度: ${mutedResonanceCheck.normalLineOpacity}`);
+    console.log(`  - L静音下点击 kp_gs01_01 激活关联线数: ${mutedResonanceCheck.activeLineCount}, 激活线透明度: ${mutedResonanceCheck.activeLineOpacity}, 普通线透明度: ${mutedResonanceCheck.normalLineOpacity}`);
 
-    if (!mutedResonanceCheck.hasActiveLine || mutedResonanceCheck.activeLineOpacity !== '1' || mutedResonanceCheck.normalLineOpacity !== '0') {
-      throw new Error(`L 键静音状态下透出规则异常: hasActive=${mutedResonanceCheck.hasActiveLine}, active=${mutedResonanceCheck.activeLineOpacity}, normal=${mutedResonanceCheck.normalLineOpacity}`);
+    if (!mutedResonanceCheck.hasActiveLine || mutedResonanceCheck.activeLineCount !== 5 || mutedResonanceCheck.activeLineOpacity !== '1' || mutedResonanceCheck.normalLineOpacity !== '0') {
+      throw new Error(`L 键静音状态下点击节点透出规则异常: count=${mutedResonanceCheck.activeLineCount}, active=${mutedResonanceCheck.activeLineOpacity}, normal=${mutedResonanceCheck.normalLineOpacity}`);
+    }
+
+    // 7. 验证在 L 键静音状态下，点击左翼知识点节点 k_equiv_table (无向反向邻接) 同样显示其 2 条关联线，点击无关联线节点 sec_1_func 则隐藏
+    const reverseAndClearCheck = await evaluate(ws, `
+      (() => {
+        const mm = window.CognitiveViewController.getInstance();
+        const findNode = (n, uid) => {
+          if (!n) return null;
+          const curUid = (n.getData && n.getData('uid')) || (n.nodeData && n.nodeData.data && n.nodeData.data.uid);
+          if (curUid === uid) return n;
+          for (const c of (n.children || [])) {
+            const f = findNode(c, uid);
+            if (f) return f;
+          }
+          return null;
+        };
+        const equivNode = findNode(mm.renderer.root, 'k_equiv_table');
+        if (equivNode) mm.emit('node_click', equivNode);
+        const equivActiveLines = Array.from(document.querySelectorAll('#cognitiveMindMapContainer .smm-associative-line-container path.smm-associative-line-path.is-active-line'));
+        const equivCount = equivActiveLines.length;
+
+        const sec1Node = findNode(mm.renderer.root, 'sec_1_func');
+        if (sec1Node) mm.emit('node_click', sec1Node);
+        const afterSec1Lines = Array.from(document.querySelectorAll('#cognitiveMindMapContainer .smm-associative-line-container path.smm-associative-line-path.is-active-line'));
+
+        return {
+          equivCount,
+          afterSec1Count: afterSec1Lines.length
+        };
+      })()
+    `);
+
+    console.log(`  - L静音下点击左翼无向节点 k_equiv_table 显线数: ${reverseAndClearCheck.equivCount} (应为2), 点击无关联线节点 sec_1_func 后显线数: ${reverseAndClearCheck.afterSec1Count} (应为0)`);
+    if (reverseAndClearCheck.equivCount !== 2 || reverseAndClearCheck.afterSec1Count !== 0) {
+      throw new Error(`L 键静音下无向节点点击或清除异常: equivCount=${reverseAndClearCheck.equivCount}, afterSec1Count=${reverseAndClearCheck.afterSec1Count}`);
     }
 
     await evaluate(ws, `
@@ -711,7 +820,7 @@ async function runTests() {
     `);
     await sleep(300);
 
-    console.log('  PASS: 原生滚轮平滑缩放、点击画布收起抽屉与原生关联线 L 键切换及静音透出校验通过');
+    console.log('  PASS: 原生滚轮平滑缩放、点击画布收起抽屉与原生关联线 L 键切换及点击节点按需透出校验通过');
 
     // ─────────────────────────────────────────────────────────────
     // 测试用例 9：单键 Q / W / E 全量展开与单键 1 / 2 / 3 层级控制专项验证

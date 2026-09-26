@@ -235,37 +235,44 @@
   transition: opacity 0.2s ease;
 }
 
-.smm-associative-line-container path {
+.smm-associative-line-container path.smm-associative-line-path {
   stroke-dasharray: none !important; /* 彻底实线化，杜绝虚线杂乱 */
   transition: stroke-width 0.18s ease, stroke 0.18s ease, opacity 0.18s ease;
   pointer-events: none !important;
 }
 
-/* L 键常态隐藏状态下，普通连线静音不可见，仅当激活时透出高亮实线 */
-.smm-associative-line-container.is-global-muted path:not(.is-active-line) {
+.smm-associative-line-container path.smm-associative-line-click-path {
+  stroke: transparent !important;
+  fill: none !important;
+  opacity: 0 !important;
+}
+
+/* L 键常态隐藏状态下，普通连线静音不可见，仅当点击有关联的节点激活时透出高亮实线 */
+.smm-associative-line-container.is-global-muted path.smm-associative-line-path:not(.is-active-line) {
   opacity: 0 !important;
   visibility: hidden !important;
 }
 
-.smm-associative-line-container.is-global-muted path.is-active-line {
+.smm-associative-line-container.is-global-muted path.smm-associative-line-path.is-active-line {
   opacity: 1 !important;
   visibility: visible !important;
   stroke: #3370ff !important;
   stroke-width: 2.4px !important;
+  filter: drop-shadow(0 2px 6px rgba(51, 112, 255, 0.45));
 }
 
 /* 常态显示状态下的层级区分 */
-.smm-associative-line-container:not(.is-global-muted) path {
+.smm-associative-line-container:not(.is-global-muted) path.smm-associative-line-path {
   opacity: 0.65;
   stroke: #3370ff;
   stroke-width: 1.6px;
 }
 
-.smm-associative-line-container:not(.is-global-muted).has-active-selection path:not(.is-active-line) {
+.smm-associative-line-container:not(.is-global-muted).has-active-selection path.smm-associative-line-path:not(.is-active-line) {
   opacity: 0.18 !important;
 }
 
-.smm-associative-line-container:not(.is-global-muted) path.is-active-line {
+.smm-associative-line-container:not(.is-global-muted) path.smm-associative-line-path.is-active-line {
   opacity: 1 !important;
   stroke: #3370ff !important;
   stroke-width: 2.4px !important;
