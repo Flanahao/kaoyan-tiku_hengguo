@@ -2304,6 +2304,7 @@
       renderNotes();
       recordRecentQuestion(getCurrentQid());
       renderRelatedQuestions();
+      renderCognitiveBadges();
       renderStats();
       updateNavActive(scrollNav);
       renderSm2InfoBar();
@@ -2383,6 +2384,102 @@
     function initRelatedModal() { if (window.TopicManager) window.TopicManager.initModal(); }
     function renderRelatedQuestions() { if (window.TopicManager) window.TopicManager.renderRelatedQuestions(); }
     function jumpToQid(qid, pushStack) { if (window.TopicManager) window.TopicManager.jumpToQid(qid, pushStack); }
+
+    // ===== 四维认知挂载插槽 (Cognitive Nexus Slot) 与全局通信事件 =====
+    function triggerOpenCognitiveView(targetMeta) {
+      const curQ = (typeof getCurrentQid === 'function') ? getCurrentQid() : '';
+      const ch = getChapter();
+      const curCh = currentChapterId || (ch ? ch.id : '');
+      const isEnglish = (curSubjectId === 'english' || (curSubject && curSubject.type === 'english'));
+      const detail = Object.assign({
+        subject: isEnglish ? 'english' : 'math',
+        qid: curQ,
+        chapterId: curCh,
+        kpId: '',
+        methodId: ''
+      }, targetMeta || {});
+
+      if (!detail.kpId && window.TopicManager && curQ) {
+        const topics = window.TopicManager.getTopicsForQid(curQ);
+        if (topics && topics.length > 0) {
+          detail.kpId = topics[0].id || '';
+          detail.kpName = topics[0].name || '';
+        }
+      }
+
+      if (window.CognitiveViewController) {
+        if (targetMeta) {
+          window.CognitiveViewController.open(detail);
+        } else {
+          window.CognitiveViewController.toggle(detail);
+        }
+      }
+
+      window.dispatchEvent(new CustomEvent('open-cognitive-view', {
+        detail: detail
+      }));
+    }
+    window.triggerOpenCognitiveView = triggerOpenCognitiveView;
+
+    function renderCognitiveBadges() {
+      const slot = document.getElementById('questionCognitiveBadges');
+      if (!slot) return;
+      const qid = (typeof getCurrentQid === 'function') ? getCurrentQid() : '';
+      slot.dataset.qid = qid || '';
+      slot.innerHTML = '';
+      if (!qid) return;
+
+      const ch = getChapter();
+      const currentChapter = currentChapterId || (ch ? ch.id : '');
+
+      let kpId = '';
+      let kpName = '';
+      let methodId = '';
+      let methodName = '';
+
+      if (ch && ch.questions && ch.questions[current] && ch.questions[current].tracingMeta) {
+        const tm = ch.questions[current].tracingMeta;
+        kpId = tm.kpId || '';
+        kpName = tm.kpTitle || tm.kpName || '';
+        methodId = tm.methodId || '';
+        methodName = tm.methodTitle || tm.methodName || '';
+      }
+
+      if (!kpId && window.TopicManager) {
+        const topics = window.TopicManager.getTopicsForQid(qid);
+        if (topics && topics.length > 0) {
+          kpId = topics[0].id;
+          kpName = topics[0].name;
+        }
+      }
+
+      if (kpName) {
+        const badgeKp = document.createElement('span');
+        badgeKp.className = 'badge badge-kp';
+        badgeKp.dataset.kpId = kpId;
+        badgeKp.title = '对应考点 (点击打开认知视图)';
+        badgeKp.innerHTML = '考点: ' + escapeHtml(kpName);
+        badgeKp.addEventListener('click', function(e) {
+          e.stopPropagation();
+          triggerOpenCognitiveView({ qid: qid, chapterId: currentChapter, kpId: kpId, methodId: methodId });
+        });
+        slot.appendChild(badgeKp);
+      }
+
+      if (methodName) {
+        const badgeMethod = document.createElement('span');
+        badgeMethod.className = 'badge badge-method';
+        badgeMethod.dataset.methodId = methodId;
+        badgeMethod.title = '所用解法 (点击打开认知视图)';
+        badgeMethod.innerHTML = '解法: ' + escapeHtml(methodName);
+        badgeMethod.addEventListener('click', function(e) {
+          e.stopPropagation();
+          triggerOpenCognitiveView({ qid: qid, chapterId: currentChapter, kpId: kpId, methodId: methodId });
+        });
+        slot.appendChild(badgeMethod);
+      }
+    }
+    window.renderCognitiveBadges = renderCognitiveBadges;
     // ===== 考研数学常用 LaTeX 符号盘与自动补全词典（已独立为 js/math_palette.js） =====
     function insertSnippetIntoNotes(snippet) {
       if (window.MathPalette) {
@@ -3228,6 +3325,13 @@
     document.getElementById('btnShortcutHelp').onclick = toggleShortcutHelp;
     const btnSm2Sidebar = document.getElementById('btnSm2PanelSidebar');
     if (btnSm2Sidebar) btnSm2Sidebar.onclick = toggleSm2Panel;
+    const btnExam = document.getElementById('btnExamWorkbench');
+    if (btnExam) {
+      btnExam.onclick = function (e) {
+        e.preventDefault();
+        triggerOpenCognitiveView();
+      };
+    }
     ['Proficient', 'Familiar', 'Vague', 'Rusty', 'Wrong'].forEach(s => {
       document.getElementById('btn' + s).onclick = function () { setStatus(s.toLowerCase()); };
     });
@@ -3458,11 +3562,25 @@ ${cardsHTML}
       // 标注模式下吃掉全部按键（Snipaste 式：避免切题/改状态等全局快捷键误触发）。
       // 需在 INPUT 判断之前：标注工具栏含 range 输入（粗细滑块），焦点在其上时 Alt 退出仍须生效。
       if (lbAnnotMode) { handleAnnotKeydown(e); return; }
+
+      // 认知思维导图沉浸视图独占拦截（z-index: 11000）：
+      // 当 O 键唤起的认知思维导图处于打开态时，主刷题系统的所有快捷键（切题、掌握度1-5、Space解析、Ctrl+Z撤销、面板H/M/V/B/G等）全部静默隔离，
+      // 仅交由 CognitiveViewController.handleHostKeydown 协调导图组件与 O / Esc 分层级退出。
+      if (window.CognitiveViewController && window.CognitiveViewController.isOpen()) {
+        if (typeof window.CognitiveViewController.handleHostKeydown === 'function') {
+          if (window.CognitiveViewController.handleHostKeydown(e)) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }
+        return;
+      }
+
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
       const key = e.key.toLowerCase();
       const isShift = e.shiftKey;
 
-      // 英语科目处于激活态时，由 english_app.js 接管做题按键，主系统放行系统级按键（G / Esc / Y / U）
+      // 英语科目处于激活态时，由 english_app.js 接管做题按键，主系统放行系统级按键（G / Esc / Y / U / O）
       if (curSubjectId === 'english' || (curSubject && curSubject.type === 'english')) {
         if (key === 'g') {
           if (subjectPickerOpen) closeSubjectPicker();
@@ -3473,6 +3591,9 @@ ${cardsHTML}
           toggleTheme();
         } else if (key === 'u') {
           toggleImageDarkFilter();
+        } else if (key === 'o') {
+          e.preventDefault();
+          triggerOpenCognitiveView();
         }
         return;
       }
@@ -3562,12 +3683,12 @@ ${cardsHTML}
       } else if (relatedModalOpen) {
         // 5. 同类题做题工作台内部快捷键接管（z-index: 10000）：
         // A/Left 上一题，D/Right 下一题，W/Up 上排，S/Down 下排，Space 切换解析，Enter 关联/移出，L/Esc 关闭
-        if (key === 'a' || key === 'arrowleft') {
+        if (key === 'a' || key === 'arrowleft' || key === 'k' || key === 'pageup') {
           e.preventDefault();
           modalPickerPrevQ();
           return;
         }
-        if (key === 'd' || key === 'arrowright') {
+        if (key === 'd' || key === 'arrowright' || key === 'j' || key === 'pagedown') {
           e.preventDefault();
           modalPickerNextQ();
           return;
@@ -3599,7 +3720,7 @@ ${cardsHTML}
         }
         if (key !== 'y' && key !== 'u') return;
       } else if (dashboardOpen || wrongBookOpen || shortcutHelpOpen || sm2PanelOpen) {
-        const panelKeys = ['h', 'escape', 'g', 'y', 'u'];
+        const panelKeys = ['h', 'escape', 'g', 'y', 'u', 'o'];
         if (dashboardOpen || wrongBookOpen) panelKeys.push('v', 'b');
         if (sm2PanelOpen) panelKeys.push('m');
         if (!panelKeys.includes(key)) return;
@@ -3662,8 +3783,8 @@ ${cardsHTML}
 
       switch (key) {
         // 上一题 / 下一题（题组级 / 子题级，见 navPrev / navNext）
-        case 'a': case 'arrowleft': navPrev(); break;
-        case 'd': case 'arrowright': navNext(); break;
+        case 'a': case 'arrowleft': case 'k': case 'pageup': navPrev(); break;
+        case 'd': case 'arrowright': case 'j': case 'pagedown': navNext(); break;
         // 小题选择模式
         case 'f': toggleSubMode(); break;
         // 上一行 / 下一行（视觉网格行导航）
@@ -3685,12 +3806,11 @@ ${cardsHTML}
         case 'v': toggleDashboard(); break;
         case 'b': toggleWrongBook(); break;
         case 'm': toggleSm2Panel(); break;
-        // 同类题关联面板与考点破题诀系统
+        // 同类题关联面板与认知视图
         case 'l': if (relatedModalOpen) closeRelatedModal(); else openRelatedModal(); break;
-        case 'k':
+        case 'o':
           e.preventDefault();
-          var curQ = (typeof getCurrentQid === 'function') ? getCurrentQid() : '';
-          window.open('exam_workbench.html' + (curQ ? '?qid=' + encodeURIComponent(curQ) : ''), '_blank');
+          triggerOpenCognitiveView();
           break;
         // 切换科目与主题与试卷暗化与侧栏/符号盘折叠
         case 'i': toggleLeftSidebar(); break;
@@ -3701,6 +3821,11 @@ ${cardsHTML}
         // 灯箱快捷键
         // Esc 严格按照视觉 z-index 倒序层级关闭，坚决杜绝层间穿透泄露
         case 'escape':
+          // 0. 认知视图沉浸浮层 (z-index 11000)
+          if (window.CognitiveViewController && window.CognitiveViewController.isOpen()) {
+            window.CognitiveViewController.close();
+            return;
+          }
           // 1. 快速关联考点下拉浮层
           var quickPop = document.getElementById('quickTopicPopover');
           if (quickPop && quickPop.style.display !== 'none') {
@@ -3786,6 +3911,7 @@ ${cardsHTML}
 
     document.addEventListener('wheel', function (e) {
       if (lbAnnotMode) return;
+      if (window.CognitiveViewController && window.CognitiveViewController.isOpen()) return;
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
       // 英语科目下禁止触发数学切题与切章（彻底防止跨学科穿透）
       if (curSubjectId === 'english' || (curSubject && curSubject.type === 'english')) return;
@@ -3793,7 +3919,7 @@ ${cardsHTML}
       if (window.isReviewSummaryOpen && window.isReviewSummaryOpen()) return;
       if (document.getElementById('lightbox').classList.contains('show')) return;
       // 侧栏与悬浮面板滚轮隔离：在左侧栏、右侧栏、题号区、符号盘或任何弹窗内部滑动时，绝不触发中央切题手势
-      if (e.target.closest && e.target.closest('.sidebar-right, .sidebar-left, .qnav-container, .qnav, .math-symbol-palette, .chapter-selector, .filter-toolbar, .export-section, .related-modal-card, .quick-topic-popover, #mathSymbolPalette, .review-summary-modal, .review-summary-overlay')) return;
+      if (e.target.closest && e.target.closest('.sidebar-right, .sidebar-left, .qnav-container, .qnav, .math-symbol-palette, .chapter-selector, .filter-toolbar, .export-section, .related-modal-card, .quick-topic-popover, #mathSymbolPalette, .review-summary-modal, .review-summary-overlay, #cognitiveModal')) return;
 
       const dx = e.deltaX || 0, dy = e.deltaY || 0;
       const isRightClick = ((e.buttons & 2) !== 0) || _isRightMouseDown;

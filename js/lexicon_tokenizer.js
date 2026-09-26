@@ -233,7 +233,7 @@
         var occId = pOcc.occurrenceId;
         var lexId = pOcc.lexemeId;
         var pMeaning = pOcc.context ? (pOcc.context.contextMeaning || '') : '';
-        result += '<span class="vocab-word lex-phrase lex-token ' + pClasses + '" data-surface="' + surfaceEsc + '" data-phrase-surface="' + surfaceEsc + '" data-occ-id="' + occId + '" data-lexeme-id="' + lexId + '" data-meaning="' + escapeHtml(pMeaning) + '"' + psAttr + artAttr + ' title="考研短语搭配: ' + textEsc + '">' + textEsc + '</span>';
+        result += '<span class="vocab-word lex-phrase lex-token ' + pClasses + '" data-word="' + surfaceEsc + '" data-surface="' + surfaceEsc + '" data-phrase-surface="' + surfaceEsc + '" data-occ-id="' + occId + '" data-lexeme-id="' + lexId + '" data-meaning="' + escapeHtml(pMeaning) + '"' + psAttr + artAttr + ' title="考研短语搭配: ' + textEsc + '">' + textEsc + '</span>';
       } else if (item.type === 'canonical-word') {
         var wOcc = item.occurrence;
         var wClasses = getHighlightClasses(wOcc);
@@ -242,7 +242,7 @@
         var wMeaning = wOcc.context ? (wOcc.context.contextMeaning || '') : '';
         // 重点词高亮加 vocab-word，未评级为重点的为普通 lex-token
         var baseCls = wClasses ? ('vocab-word ' + wClasses) : 'lex-token lex-word';
-        result += '<span class="' + baseCls + '" data-surface="' + surfaceEsc + '" data-occ-id="' + wOccId + '" data-lexeme-id="' + wLexId + '" data-meaning="' + escapeHtml(wMeaning) + '"' + psAttr + artAttr + '>' + textEsc + '</span>';
+        result += '<span class="' + baseCls + '" data-word="' + surfaceEsc + '" data-surface="' + surfaceEsc + '" data-occ-id="' + wOccId + '" data-lexeme-id="' + wLexId + '" data-meaning="' + escapeHtml(wMeaning) + '"' + psAttr + artAttr + '>' + textEsc + '</span>';
       } else {
         // plain-token：正文普通单词，无色高亮，但完全可点击
         result += '<span class="lex-token lex-word" data-surface="' + surfaceEsc + '"' + psAttr + artAttr + '>' + textEsc + '</span>';

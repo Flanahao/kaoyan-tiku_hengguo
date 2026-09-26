@@ -1396,8 +1396,9 @@
     saveResume(); // 切换篇章后保存位置（恢复时可精确到篇章+题目）
 
     const targetArtId = text ? `ky-en1-${state.currentYear}-r-t${text.number}` : null;
+    let loadPromise = Promise.resolve();
     if (window.LexiconLoader && targetArtId) {
-      window.LexiconLoader.loadArticle(targetArtId).then(() => {
+      loadPromise = window.LexiconLoader.loadArticle(targetArtId).then(() => {
         if (state.currentTextId === text.id || state.currentTextId === text.aliasId) {
           renderPassage();
         }
@@ -1408,6 +1409,7 @@
     renderPassage();
     renderQuestionPills();
     renderQuestion();
+    return loadPromise;
   }
 
   // 渲染文章主体（考研英语真题单篇精读）
@@ -2840,6 +2842,13 @@
 
       // 全局通用快捷键（考研英语专属控制）
       // 注：Y (主题切换) 与 G (科目切换) 已由主系统 app.js 单轨处理，此处不再重复监听，消除双重翻转抵消 Bug
+      if (e.key === 'o' || e.key === 'O') {
+        if (typeof window.triggerOpenCognitiveView === 'function') {
+          e.preventDefault();
+          window.triggerOpenCognitiveView({ subject: 'english' });
+          return;
+        }
+      }
       if (e.key === 't' || e.key === 'T') {
         if (dom.btnToggleTrans) dom.btnToggleTrans.click();
         return;
@@ -3247,6 +3256,7 @@
     toggleStarWord,
     openVocabNotebook,
     closeVocabNotebook,
+    renderVocabNotebook,
     selectOption,
     navPrev,
     navNext,

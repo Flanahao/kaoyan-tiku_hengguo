@@ -2619,6 +2619,37 @@ test('题目面包屑标签与导航提示无重复前缀 (Anti-Stutter QLabel) 
   assert.strictEqual(descYao, '1.1 映射与函数 · 例题 · 1.1-1', '老姚高数第一题面包屑必须精准且无重复');
 });
 
+// --- 32. 题库系统现代化重构与接口预留专项契约 (Conversation 1 Contract) ---
+test('题库系统现代化重构与接口预留专项契约 (Conversation 1 Contract)', () => {
+  const indexHtml = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  const appJs = fs.readFileSync(path.join(__dirname, '../js/app.js'), 'utf8');
+  const stylesCss = fs.readFileSync(path.join(__dirname, '../css/styles.css'), 'utf8');
+
+  // 1. 废弃外链移除与单一入口收敛
+  assert.ok(!indexHtml.includes('href="exam_workbench.html"'), 'index.html 绝不能残留 href="exam_workbench.html" 废弃外链');
+  assert.ok(indexHtml.includes('id="btnExamWorkbench"'), 'index.html 必须保留并升级 id="btnExamWorkbench" 认知入口按钮');
+  assert.ok(!appJs.includes("window.open('exam_workbench.html"), 'app.js 绝不能保留打开 exam_workbench.html 逻辑');
+
+  // 2. 四维认知挂载插槽 (Cognitive Nexus Slot)
+  assert.ok(indexHtml.includes('id="questionCognitiveBadges"'), 'index.html 题目卡片头部必须具备 id="questionCognitiveBadges" 插槽');
+  assert.ok(indexHtml.includes('class="question-cognitive-badges"'), 'index.html 必须包含 question-cognitive-badges 类');
+
+  // 3. 通信事件与挂载逻辑
+  assert.ok(appJs.includes("CustomEvent('open-cognitive-view'"), 'app.js 必须派发 open-cognitive-view 全局通信事件');
+  assert.ok(appJs.includes('function renderCognitiveBadges()'), 'app.js 必须具备 renderCognitiveBadges 渲染函数');
+  assert.ok(appJs.includes('function triggerOpenCognitiveView('), 'app.js 必须具备 triggerOpenCognitiveView 纯函数');
+
+  // 4. 全键盘做题流 (J/K, PgUp/PgDn, 1-3, O)
+  assert.ok(appJs.includes("case 'j':") && appJs.includes("case 'k':"), 'app.js 必须支持 J / K 键盘切题流');
+  assert.ok(appJs.includes("case 'pageup':") && appJs.includes("case 'pagedown':"), 'app.js 必须支持 PageUp / PageDown 切题流');
+  assert.ok(appJs.includes("case 'o':"), 'app.js 必须支持 O 键唤起四维认知中枢');
+
+  // 5. 现代纯净质感与 KaTeX 抗跳动样式
+  assert.ok(stylesCss.includes('contain: layout style;'), 'styles.css 必须包含 KaTeX contain: layout style 抗跳动渲染');
+  assert.ok(stylesCss.includes('.question-cognitive-badges'), 'styles.css 必须包含 question-cognitive-badges 样式');
+  assert.ok(stylesCss.includes('.badge-kp') && stylesCss.includes('.badge-method'), 'styles.css 必须包含 badge-kp 与 badge-method 样式');
+});
+
 console.log('\n====================================================');
 console.log(`  测试结果: ${passedTests} passed, ${failedTests} failed`);
 console.log('====================================================\n');

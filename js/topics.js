@@ -1131,6 +1131,10 @@
       } else {
         list.innerHTML = '<div class="related-empty-hint">暂无关联同类题，可点击右侧「关联同类题 (L)」随时进行跨书归类与考点关联</div>';
       }
+
+      if (typeof window.renderCognitiveBadges === 'function') {
+        window.renderCognitiveBadges();
+      }
     }
 
     // 4. 跨书/跨章无缝跳转与返回栈管理

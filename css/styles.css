@@ -6912,3 +6912,146 @@
       background: linear-gradient(135deg, #ef4444, #dc2626);
       box-shadow: 0 6px 16px rgba(239, 68, 68, 0.45);
     }
+
+    /* ===== 题库现代化与纯净质感升级 ===== */
+
+    /* 1. KaTeX Anti-Layout-Shift (CLS 混合排版防跳动渲染优化) */
+    .katex-display {
+      contain: layout style;
+      min-height: 2.2em;
+      margin: 0.8em 0 !important;
+      overflow-x: auto;
+      overflow-y: hidden;
+      text-rendering: optimizeLegibility;
+    }
+    .katex {
+      text-rendering: optimizeLegibility;
+      font-size: 1.05em;
+      line-height: 1.25;
+    }
+
+    /* 2. 题目卡片标题栏与四维认知挂载插槽 (Cognitive Nexus Slot) */
+    .question-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      width: 100%;
+      margin-bottom: 10px;
+    }
+    .question-header-row .q-label {
+      width: auto;
+      margin-bottom: 0;
+    }
+    .question-cognitive-badges {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .question-cognitive-badges .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      font-size: 12.5px;
+      font-weight: 600;
+      border-radius: 9999px;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+    .question-cognitive-badges .badge:hover {
+      transform: translateY(-1px) scale(1.02);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+    }
+    .question-cognitive-badges .badge:active {
+      transform: translateY(0) scale(0.98);
+    }
+    .question-cognitive-badges .badge .badge-icon {
+      font-size: 12px;
+      line-height: 1;
+    }
+    .question-cognitive-badges .badge-kp {
+      background: rgba(22, 119, 255, 0.08);
+      border: 1px solid rgba(22, 119, 255, 0.25);
+      color: #1677ff;
+    }
+    .question-cognitive-badges .badge-kp:hover {
+      background: rgba(22, 119, 255, 0.15);
+      border-color: #1677ff;
+    }
+    .question-cognitive-badges .badge-method {
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      color: #059669;
+    }
+    .question-cognitive-badges .badge-method:hover {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: #10b981;
+    }
+
+    [data-theme="dark"] .question-cognitive-badges .badge-kp {
+      background: rgba(59, 130, 246, 0.16);
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      color: #60a5fa;
+    }
+    [data-theme="dark"] .question-cognitive-badges .badge-kp:hover {
+      background: rgba(59, 130, 246, 0.25);
+      border-color: #93c5fd;
+    }
+    [data-theme="dark"] .question-cognitive-badges .badge-method {
+      background: rgba(16, 185, 129, 0.16);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      color: #34d399;
+    }
+    [data-theme="dark"] .question-cognitive-badges .badge-method:hover {
+      background: rgba(16, 185, 129, 0.25);
+      border-color: #6ee7b7;
+    }
+
+    /* 3. 题目卡片排版质感与平滑微动效 */
+    .annot-wrapper {
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .choice-option, .practice-option-card, .opt-card, .option-item {
+      transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+    .choice-option:hover, .practice-option-card:hover, .opt-card:hover, .option-item:hover {
+      transform: translateY(-1px);
+    }
+    .choice-option:active, .practice-option-card:active, .opt-card:active, .option-item:active {
+      transform: scale(0.985);
+    }
+
+    /* 4. 解析展开区域平滑过渡 */
+    .solution-area {
+      transition: opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .solution-area.show {
+      animation: modernFadeIn 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    @keyframes modernFadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(4px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* 5. 侧栏按钮交互与微动效 */
+    .sidebar-left .sol-default-btn {
+      transition: all 0.16s cubic-bezier(0.4, 0, 0.2, 1);
+      border-radius: 8px;
+    }
+    .sidebar-left .sol-default-btn:hover {
+      transform: translateY(-1px);
+    }
+    .sidebar-left .sol-default-btn:active {
+      transform: translateY(0) scale(0.985);
+    }

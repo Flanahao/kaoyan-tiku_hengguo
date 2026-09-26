@@ -102,6 +102,12 @@
     }
 
     if (totalWords === 0) {
+      if (global.kyApp && typeof global.kyApp.renderVocabNotebook === 'function') {
+        global.kyApp.renderVocabNotebook();
+        if (dom.grid.querySelector('.vocab-card')) {
+          return;
+        }
+      }
       dom.grid.innerHTML = [
         '<div class="vocab-empty" style="grid-column: 1 / -1; padding: 60px 20px; text-align: center;">',
         '  <div style="font-size:18px;color:var(--text);font-weight:700;">生词本暂无记录</div>',
