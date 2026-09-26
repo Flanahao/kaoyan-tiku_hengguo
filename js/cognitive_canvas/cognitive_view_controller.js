@@ -23,6 +23,8 @@
   var activeLinesLayer = null;
   var isAssociativeLineVisible = true;
   var pendingFitOnRender = false;
+  var pendingViewportAction = null;
+  var pendingViewportTimer = null;
   var currentActiveSubject = 'math';
 
   // 思维导图工具集实例引用
@@ -82,12 +84,50 @@
     });
   }
 
-  function getCustomNodesRbox() {
+  // 递归收集目标子树根节点及其所有当前展开可见后代节点的 UID 集合（用于独立视野分配，排除非目标分支）
+  function collectSubtreeUidSet(targetRootUids) {
+    if (!Array.isArray(targetRootUids) || targetRootUids.length === 0 || !mindMapInstance) {
+      return null;
+    }
+    var rootSet = new Set(targetRootUids.filter(Boolean));
+    if (rootSet.size === 0) return null;
+
+    var collected = new Set();
+    var treeData = mindMapInstance.getData ? mindMapInstance.getData(false) : null;
+
+    function walkData(node, inTarget) {
+      if (!node) return;
+      var d = node.data || {};
+      var uid = d.uid || '';
+      var matched = Boolean(inTarget || (uid && rootSet.has(uid)));
+      if (matched && uid) {
+        collected.add(uid);
+      }
+      var isExpanded = (d.expand !== false);
+      if (isExpanded && Array.isArray(node.children)) {
+        for (var i = 0; i < node.children.length; i++) {
+          walkData(node.children[i], matched);
+        }
+      }
+    }
+
+    if (treeData) {
+      walkData(treeData, false);
+    }
+    return collected.size > 0 ? collected : null;
+  }
+
+  function measureTargetCardsBounds(allowedUidSet) {
     var cards = document.querySelectorAll('#cognitiveMindMapContainer .smm-node .mm-node-card');
     var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     var count = 0;
     for (var i = 0; i < cards.length; i++) {
-      var r = cards[i].getBoundingClientRect();
+      var card = cards[i];
+      if (allowedUidSet) {
+        var uid = card.getAttribute('data-node-uid') || '';
+        if (!allowedUidSet.has(uid)) continue;
+      }
+      var r = card.getBoundingClientRect();
       if (r.width > 0 && r.height > 0 && r.left > -10000 && r.top > -10000) {
         if (r.left < minX) minX = r.left;
         if (r.top < minY) minY = r.top;
@@ -97,27 +137,145 @@
       }
     }
     if (count === 0) return null;
-    // 预留顶部悬浮栏与底部工具栏的安全边距
     return {
-      x: minX,
-      y: minY - 18,
+      minX: minX,
+      minY: minY,
+      maxX: maxX,
+      maxY: maxY,
       width: Math.max(1, maxX - minX),
-      height: Math.max(1, (maxY - minY) + 36)
+      height: Math.max(1, maxY - minY),
+      count: count
     };
   }
 
-  function fitCanvasToViewport(padding) {
-    if (!mindMapInstance || !mindMapInstance.view) return;
-    var pad = typeof padding === 'number' ? padding : 48;
-    mindMapInstance.view.fit(getCustomNodesRbox, false, pad);
-    if (structureController) structureController.updateZoomDisplay();
+  function getCustomNodesRbox() {
+    var b = measureTargetCardsBounds(null);
+    if (!b) return null;
+    // 预留顶部悬浮栏与底部工具栏的安全边距
+    return {
+      x: b.minX,
+      y: b.minY - 18,
+      width: b.width,
+      height: Math.max(1, b.height + 36)
+    };
   }
 
-  function scheduleFitView(padding) {
+  // 目标子树/全图智能相机定焦：仅对目标节点分配视野，支持可读缩放保底 (minReadableScale) 与超高分支顶部对齐
+  function fitSubtreeToViewport(targetRootUids, options) {
+    if (!mindMapInstance || !mindMapInstance.view) return;
+    var opts = options || {};
+    var pad = typeof opts.padding === 'number' ? opts.padding : 48;
+    var minReadableScale = typeof opts.minReadableScale === 'number' ? opts.minReadableScale : 0;
+    var maxScale = typeof opts.maxScale === 'number' ? opts.maxScale : 1.08;
+    var verticalAnchor = opts.verticalAnchor || 'auto'; // 'auto' | 'top' | 'center'
+
+    var allowedUidSet = collectSubtreeUidSet(targetRootUids);
+    var getTargetRbox = function () {
+      var b = measureTargetCardsBounds(allowedUidSet) || measureTargetCardsBounds(null);
+      if (!b) return null;
+      return {
+        x: b.minX,
+        y: b.minY - 18,
+        width: b.width,
+        height: Math.max(1, b.height + 36)
+      };
+    };
+
+    // 第一步：利用原生 view.fit 针对目标子树（排除非目标分支）做基础居中适配
+    mindMapInstance.view.fit(getTargetRbox, false, pad);
+
+    // 第二步：若设置了可读缩放保底/上限或顶部对齐，对缩放率与平移位置做闭环精修
+    var container = document.getElementById('cognitiveMindMapContainer');
+    var cRect = container ? container.getBoundingClientRect() : null;
+    var vw = (cRect && cRect.width > 0) ? cRect.width : 1440;
+    var vh = (cRect && cRect.height > 0) ? cRect.height : 900;
+    var cLeft = cRect ? cRect.left : 0;
+    var cTop = cRect ? cRect.top : 0;
+
+    var bAfterFit = measureTargetCardsBounds(allowedUidSet) || measureTargetCardsBounds(null);
+    if (bAfterFit) {
+      var curScale = (mindMapInstance.view && typeof mindMapInstance.view.scale === 'number')
+        ? mindMapInstance.view.scale
+        : 1;
+      var availW = Math.max(240, vw - pad * 2);
+      var availH = Math.max(240, vh - pad * 2 - 24);
+      var worldW = bAfterFit.width / Math.max(0.1, curScale);
+      var scaleToFitWidth = availW / Math.max(1, worldW);
+
+      var targetScale = curScale;
+      if (minReadableScale > 0 && targetScale < minReadableScale) {
+        targetScale = Math.min(scaleToFitWidth, minReadableScale);
+      }
+      if (maxScale > 0 && targetScale > maxScale) {
+        targetScale = maxScale;
+      }
+      targetScale = Math.max(0.25, targetScale);
+
+      if (Math.abs(targetScale - curScale) > 0.01 && typeof mindMapInstance.view.setScale === 'function') {
+        mindMapInstance.view.setScale(targetScale, vw / 2, vh / 2);
+      }
+
+      // 重新测量精修缩放后的目标子树真实屏幕坐标，计算精准位移
+      var bFinal = measureTargetCardsBounds(allowedUidSet) || bAfterFit;
+      var targetCenterX = cLeft + vw / 2;
+      var curCenterX = (bFinal.minX + bFinal.maxX) / 2;
+      var dx = targetCenterX - curCenterX;
+
+      var isTallSubtree = bFinal.height > availH + 12;
+      var shouldAlignTop = (verticalAnchor === 'top' && isTallSubtree) ||
+                           (verticalAnchor === 'auto' && minReadableScale > 0 && isTallSubtree);
+
+      var dy = 0;
+      if (shouldAlignTop) {
+        var targetTopY = cTop + pad;
+        dy = targetTopY - bFinal.minY;
+      } else {
+        var targetCenterY = cTop + (vh - 20) / 2;
+        var curCenterY = (bFinal.minY + bFinal.maxY) / 2;
+        dy = targetCenterY - curCenterY;
+      }
+
+      if ((Math.abs(dx) > 1 || Math.abs(dy) > 1) && typeof mindMapInstance.view.translateXY === 'function') {
+        mindMapInstance.view.translateXY(dx, dy);
+      }
+    }
+
+    if (structureController) structureController.updateZoomDisplay();
+    syncAssociativeLinesState();
+  }
+
+  function fitCanvasToViewport(padding, options) {
+    var opts = Object.assign({}, options || {});
+    if (typeof padding === 'number') opts.padding = padding;
+    fitSubtreeToViewport(null, opts);
+  }
+
+  function scheduleViewportAction(actionFn, immediateIfReady) {
+    var fn = typeof actionFn === 'function' ? actionFn : function () { fitCanvasToViewport(48); };
     pendingFitOnRender = true;
-    setTimeout(function () {
-      fitCanvasToViewport(padding);
+    pendingViewportAction = fn;
+    if (pendingViewportTimer) {
+      clearTimeout(pendingViewportTimer);
+      pendingViewportTimer = null;
+    }
+    if (immediateIfReady) {
+      pendingFitOnRender = false;
+      fn();
+      pendingViewportTimer = setTimeout(function () {
+        fn();
+      }, 80);
+      return;
+    }
+    pendingViewportTimer = setTimeout(function () {
+      pendingFitOnRender = false;
+      fn();
     }, 320);
+  }
+
+  function scheduleFitView(padding, options) {
+    scheduleViewportAction(function () {
+      fitCanvasToViewport(padding, options);
+    }, false);
   }
 
   function initTheme() {
@@ -724,7 +882,26 @@
         outliner: outliner,
         onLevelChange: function (lvl) {
           updateLevelButtonsUI(lvl);
-          scheduleFitView();
+          if (lvl === 3) {
+            scheduleFitView(48, { minReadableScale: 0.76, maxScale: 1.0, verticalAnchor: 'top' });
+          } else if (lvl === 0) {
+            scheduleFitView(48, { minReadableScale: 0, maxScale: 1.0, verticalAnchor: 'center' });
+          } else {
+            scheduleFitView(48, { minReadableScale: 0.85, maxScale: 1.05, verticalAnchor: 'center' });
+          }
+        },
+        onCategoryFocus: function (targetCategory, activeStep, cycleState, treeModified) {
+          updateLevelButtonsUI(99);
+          var rootUids = (activeStep && Array.isArray(activeStep.targetRootUids)) ? activeStep.targetRootUids : [];
+          var fitOpts = {
+            padding: 48,
+            minReadableScale: (activeStep && typeof activeStep.minReadableScale === 'number') ? activeStep.minReadableScale : 0.84,
+            maxScale: (activeStep && typeof activeStep.maxScale === 'number') ? activeStep.maxScale : 1.05,
+            verticalAnchor: (activeStep && activeStep.verticalAnchor) ? activeStep.verticalAnchor : 'auto'
+          };
+          scheduleViewportAction(function () {
+            fitSubtreeToViewport(rootUids, fitOpts);
+          }, !treeModified);
         }
       });
     }
@@ -782,7 +959,11 @@
     mindMapInstance.on('node_tree_render_end', function () {
       if (pendingFitOnRender && mindMapInstance && mindMapInstance.view) {
         pendingFitOnRender = false;
-        fitCanvasToViewport();
+        if (typeof pendingViewportAction === 'function') {
+          pendingViewportAction();
+        } else {
+          fitCanvasToViewport();
+        }
       }
       if (mindMapInstance.associativeLine && typeof mindMapInstance.associativeLine.renderAllLines === 'function') {
         mindMapInstance.associativeLine.renderAllLines();
@@ -1079,12 +1260,14 @@
     syncAssociativeLinesState();
   }
 
-  // 展开至指定层级 (默认 level=2 一览全局)
+  // 展开至指定层级 (1=分节骨架，2=核心全景同级对齐，3=微观详情可读聚焦)
   function expandToLevel(level) {
     if (!mindMapInstance) return;
     if (shortcutManager && typeof shortcutManager.expandToLevel === 'function') {
       shortcutManager.expandToLevel(level);
-    } else if (typeof mindMapInstance.execCommand === 'function') {
+      return;
+    }
+    if (typeof mindMapInstance.execCommand === 'function') {
       mindMapInstance.execCommand('UNEXPAND_TO_LEVEL', level);
     }
     updateLevelButtonsUI(level);
@@ -1095,11 +1278,13 @@
     if (!mindMapInstance) return;
     if (shortcutManager && typeof shortcutManager.expandAll === 'function') {
       shortcutManager.expandAll();
-    } else if (typeof mindMapInstance.execCommand === 'function') {
+      return;
+    }
+    if (typeof mindMapInstance.execCommand === 'function') {
       mindMapInstance.execCommand('EXPAND_ALL');
     }
-    updateLevelButtonsUI(99);
-    scheduleFitView();
+    updateLevelButtonsUI(0);
+    scheduleFitView(48, { minReadableScale: 0, maxScale: 1.0, verticalAnchor: 'center' });
   }
 
   // 宿主键盘拦截器：由 app.js 在 #cognitiveModal 打开时优先调用，实现严格分层级回退与关闭
@@ -1156,55 +1341,59 @@
       }
     }
 
-    // 快捷键单键系统 (1, 2, 3, 0, Q, W, E, L) - 非打字编辑态下直接单键极速触发
-    if (!isTyping && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
-      if (e.key === '1') {
-        expandToLevel(1); // 1 键：知识点展开至 1.1~3.3（公式折叠），考点展开至 5 大考点，招法展开至 7 大招法
-        return true;
-      }
-      if (e.key === '2') {
-        expandToLevel(2); // 2 键：微观定理公式、真题题源与解题步骤全展开
-        return true;
-      }
-      if (e.key === '3') {
-        expandToLevel(3); // 3 键：全量深度展开
-        return true;
-      }
-      if (e.key === '0') {
+    var isBackquoteKey = (e.code === 'Backquote' || e.key === '`' || e.key === '~' || e.key === '·');
+
+    // 快捷键单键系统 (~/·, 1, 2, 3, Q, W, E, L，兼容 0) - 非打字编辑态下直接单键极速触发
+    if (!isTyping && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (isBackquoteKey || (!e.shiftKey && e.key === '0')) {
         expandAll();
         return true;
       }
-      var k = (e.key || '').toLowerCase();
-      if (k === 'q') {
-        if (shortcutManager && typeof shortcutManager.expandCategory === 'function') {
-          shortcutManager.expandCategory('knowledge');
+      if (!e.shiftKey) {
+        if (e.key === '1') {
+          expandToLevel(1); // 1 键：分节骨架（左至 §1~§3，右至考点/招法标题）
+          return true;
         }
-        return true;
-      }
-      if (k === 'w') {
-        if (shortcutManager && typeof shortcutManager.expandCategory === 'function') {
-          shortcutManager.expandCategory('exam');
+        if (e.key === '2') {
+          expandToLevel(2); // 2 键：核心全景（左至 1.1~3.3，右至考点/招法，同级对齐）
+          return true;
         }
-        return true;
-      }
-      if (k === 'e') {
-        if (shortcutManager && typeof shortcutManager.expandCategory === 'function') {
-          shortcutManager.expandCategory('method');
+        if (e.key === '3') {
+          expandToLevel(3); // 3 键：全量微观详情展开 + 可读保底缩放聚焦
+          return true;
         }
-        return true;
-      }
-      if (k === 'l') {
-        toggleAssociativeLines();
-        return true;
+        var k = (e.key || '').toLowerCase();
+        if (k === 'q') {
+          if (shortcutManager && typeof shortcutManager.expandCategory === 'function') {
+            shortcutManager.expandCategory('knowledge');
+          }
+          return true;
+        }
+        if (k === 'w') {
+          if (shortcutManager && typeof shortcutManager.expandCategory === 'function') {
+            shortcutManager.expandCategory('exam');
+          }
+          return true;
+        }
+        if (k === 'e') {
+          if (shortcutManager && typeof shortcutManager.expandCategory === 'function') {
+            shortcutManager.expandCategory('method');
+          }
+          return true;
+        }
+        if (k === 'l') {
+          toggleAssociativeLines();
+          return true;
+        }
       }
     }
 
-    // 兼容 Alt + 1/2/3/0/Q/W/E 组合键
+    // 兼容 Alt + ~/· / 1 / 2 / 3 / 0 / Q / W / E 组合键
     if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && !isTyping) {
+      if (isBackquoteKey || e.key === '0') { expandAll(); return true; }
       if (e.key === '1') { expandToLevel(1); return true; }
       if (e.key === '2') { expandToLevel(2); return true; }
       if (e.key === '3') { expandToLevel(3); return true; }
-      if (e.key === '0') { expandAll(); return true; }
       var kAlt = (e.key || '').toLowerCase();
       if (kAlt === 'q' || kAlt === 'w' || kAlt === 'e') {
         if (shortcutManager && typeof shortcutManager.expandCategory === 'function') {
@@ -1335,6 +1524,8 @@
     handleHostKeydown: handleHostKeydown,
     expandToLevel: expandToLevel,
     expandAll: expandAll,
+    fitCanvasToViewport: fitCanvasToViewport,
+    fitSubtreeToViewport: fitSubtreeToViewport,
     applyFocusResonanceByUid: applyFocusResonanceByUid,
     toggleFocusResonanceByUid: toggleFocusResonanceByUid,
     clearFocusResonance: clearFocusResonance,
