@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>第1章 讲义内容对照 · 函数与极限</title>
+  <link rel="stylesheet" href="../lib/katex/katex.min.css" />
+  <link rel="stylesheet" href="css/compare.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="toolbar">
+      <h1><span>第1章</span>函数与极限 · 讲义 MD 对照</h1>
+      <div class="sub" id="data-info">内容已本地嵌入，打开即渲染</div>
+
+      <div id="chips" class="chips" aria-label="数据源筛选"></div>
+
+      <div class="actions">
+        <button type="button" id="btn-all" class="btn">全选</button>
+        <button type="button" id="btn-none" class="btn">清空</button>
+        <button type="button" id="btn-default" class="btn">默认</button>
+        <button type="button" id="btn-render" class="btn active">渲染</button>
+        <button type="button" id="btn-outline" class="btn" title="仅显示标题层级，便于对齐小节">仅标题</button>
+        <button type="button" id="btn-raw" class="btn" title="显示 Markdown 源文">原文</button>
+        <button type="button" id="btn-sync" class="btn" title="按滚动比例同步各栏">同步滚动：关</button>
+      </div>
+    </header>
+
+    <div class="main" id="panes" aria-live="polite">
+      <div class="status">正在初始化…</div>
+    </div>
+  </div>
+
+  <!-- 渲染依赖 -->
+  <script src="../lib/marked/marked.umd.min.js"></script>
+  <script src="../lib/dompurify/purify.min.js"></script>
+  <script src="../lib/katex/katex.min.js"></script>
+  <script src="../lib/katex/contrib/auto-render.min.js"></script>
+  <script src="../js/markdown_latex.js"></script>
+  <!-- 嵌入数据（必载）→ 再启动对照逻辑 -->
+  <script src="js/data.js"></script>
+  <script src="js/compare.js"></script>
+</body>
+</html>
