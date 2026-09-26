@@ -62,13 +62,13 @@
           <!-- 节点与层级操作 -->
           <div class="shortcut-section">
             <div class="shortcut-section-title">层级与分类展开</div>
-            <div class="shortcut-item"><span>全量展开知识点</span><kbd>Q</kbd></div>
-            <div class="shortcut-item"><span>全量展开核心考点</span><kbd>W</kbd></div>
-            <div class="shortcut-item"><span>全量展开解题方法</span><kbd>E</kbd></div>
-            <div class="shortcut-item"><span>三柱总览 (展开至3级)</span><kbd>1</kbd></div>
-            <div class="shortcut-item"><span>微观要点 (展开至4级)</span><kbd>2</kbd></div>
-            <div class="shortcut-item"><span>深度展开 (展开至5级)</span><kbd>3</kbd></div>
-            <div class="shortcut-item"><span>展开全部节点</span><kbd>0</kbd></div>
+            <div class="shortcut-item"><span>聚焦知识点 (连按巡航分节)</span><kbd>Q</kbd></div>
+            <div class="shortcut-item"><span>聚焦核心考点 (连按巡航分组)</span><kbd>W</kbd></div>
+            <div class="shortcut-item"><span>聚焦解题方法 (连按巡航招法)</span><kbd>E</kbd></div>
+            <div class="shortcut-item"><span>分节骨架 (左至§1~§3)</span><kbd>1</kbd></div>
+            <div class="shortcut-item"><span>核心全景 (同级对齐总览)</span><kbd>2</kbd></div>
+            <div class="shortcut-item"><span>微观精读 (全展开可读聚焦)</span><kbd>3</kbd></div>
+            <div class="shortcut-item"><span>全图鸟瞰 (展开全部节点)</span><kbd>~ / ·</kbd></div>
             <div class="shortcut-item"><span>展开/折叠当前节点</span><kbd>Alt + .</kbd></div>
             <div class="shortcut-item"><span>复制 / 创建副本</span><kbd>Ctrl + C / Ctrl + D</kbd></div>
           </div>

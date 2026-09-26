@@ -61,6 +61,12 @@
       this.drillStack = [];
       this.breadcrumbEl = null;
 
+      // Q / W / E 分类展开与连按分段巡航状态机
+      this.categoryCycleState = {
+        category: null,
+        stepIndex: 0
+      };
+
       this.initBreadcrumbDom();
       this.bindShortcuts();
     }
@@ -153,58 +159,62 @@
           }
         }
 
-        // 2.1 单键层级概览与全量分类展开 (1, 2, 3, 0, Q, W, E, L) - 非编辑/打字态下直接生效
-        if (!isEditing && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-          if (e.key === '1' || e.key === '2' || e.key === '3' || e.key === '0') {
+        const isBackquoteKey = (e.code === 'Backquote' || e.key === '`' || e.key === '~' || e.key === '·');
+
+        // 2.1 单键层级概览与分类巡航展开 (~/·, 1, 2, 3, Q, W, E, L，兼容 0) - 非编辑/打字态下直接生效
+        if (!isEditing && !e.altKey && !e.ctrlKey && !e.metaKey) {
+          if (isBackquoteKey || (!e.shiftKey && (e.key === '1' || e.key === '2' || e.key === '3' || e.key === '0'))) {
             e.preventDefault();
             e.stopPropagation();
-            if (e.key === '0') {
-              this.expandAll();
+            if (isBackquoteKey || e.key === '0') {
+              this.expandAll(); // ~/· 键 (1键左侧)：全图鸟瞰展开全部节点
             } else if (e.key === '1') {
-              this.expandToLevel(1); // 1 键：知识点展开至 1.1~3.3，考点展开至 5 大考点，招法展开至 7 大招法
+              this.expandToLevel(1); // 1 键：分节骨架（左至 §1~§3，右至考点/招法标题）
             } else if (e.key === '2') {
-              this.expandToLevel(2); // 2 键：微观要点与真题步骤展开
+              this.expandToLevel(2); // 2 键：核心全景（左至 1.1~3.3，右至考点/招法，同级对齐）
             } else if (e.key === '3') {
-              this.expandToLevel(3); // 3 键：全量深度展开
+              this.expandToLevel(3); // 3 键：全量微观详情展开 + 可读保底缩放聚焦
             }
             return;
           }
 
-          const k = (e.key || '').toLowerCase();
-          if (k === 'q') {
-            e.preventDefault();
-            e.stopPropagation();
-            this.expandCategory('knowledge');
-            return;
-          }
-          if (k === 'w') {
-            e.preventDefault();
-            e.stopPropagation();
-            this.expandCategory('exam');
-            return;
-          }
-          if (k === 'e') {
-            e.preventDefault();
-            e.stopPropagation();
-            this.expandCategory('method');
-            return;
-          }
-          if (k === 'l') {
-            e.preventDefault();
-            e.stopPropagation();
-            if (window.CognitiveViewController && typeof window.CognitiveViewController.toggleAssociativeLines === 'function') {
-              window.CognitiveViewController.toggleAssociativeLines();
+          if (!e.shiftKey) {
+            const k = (e.key || '').toLowerCase();
+            if (k === 'q') {
+              e.preventDefault();
+              e.stopPropagation();
+              this.expandCategory('knowledge');
+              return;
             }
-            return;
+            if (k === 'w') {
+              e.preventDefault();
+              e.stopPropagation();
+              this.expandCategory('exam');
+              return;
+            }
+            if (k === 'e') {
+              e.preventDefault();
+              e.stopPropagation();
+              this.expandCategory('method');
+              return;
+            }
+            if (k === 'l') {
+              e.preventDefault();
+              e.stopPropagation();
+              if (window.CognitiveViewController && typeof window.CognitiveViewController.toggleAssociativeLines === 'function') {
+                window.CognitiveViewController.toggleAssociativeLines();
+              }
+              return;
+            }
           }
         }
 
-        // 兼容 Alt + 1 / 2 / 3 / 0 / Q / W / E
+        // 兼容 Alt + ~/· / 1 / 2 / 3 / 0 / Q / W / E
         if (!isEditing && e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-          if (e.key === '1' || e.key === '2' || e.key === '3' || e.key === '0') {
+          if (isBackquoteKey || e.key === '1' || e.key === '2' || e.key === '3' || e.key === '0') {
             e.preventDefault();
             e.stopPropagation();
-            if (e.key === '0') this.expandAll();
+            if (isBackquoteKey || e.key === '0') this.expandAll();
             else if (e.key === '1') this.expandToLevel(1);
             else if (e.key === '2') this.expandToLevel(2);
             else if (e.key === '3') this.expandToLevel(3);
@@ -457,12 +467,10 @@
       }
     }
 
-    // 按指定层级展开导图 (实现“一览全局”与三柱同频展开能力)
-    expandToLevel(level = 1) {
-      if (level >= 3) {
-        this.expandAll();
-        return;
-      }
+    // 按指定层级展开导图 (递进式三级梯度：1=分节骨架，2=核心全景同级对齐，3=全量微观详情可读聚焦)
+    expandToLevel(level = 2) {
+      this.categoryCycleState = { category: null, stepIndex: 0 };
+
       const treeData = this.mindMap.getData(false);
       if (treeData) {
         const walk = (node, depth, branchType) => {
@@ -478,22 +486,23 @@
           if (depth === 0 || depth === 1) {
             node.data.expand = true;
           } else if (curBranch === 'knowledge') {
-            // 知识点体系：含有 §1/§2/§3 章节中间层 (depth 2)
-            // level 1: 展开至 1.1~3.3 知识点卡片，1.1~3.3 内部公式定理折叠
-            // level 2: 展开 1.1~3.3 内部公式定理卡片
+            // 知识点体系含有 §1/§2/§3 分节中间层 (depth 2)，其下 1.1~3.3 (depth 3) 与右翼考点/招法 (depth 2) 同属二级核心层：
+            // level 1 (分节骨架): §1, §2, §3 自身可见但折叠 (expand=false)，1.1~3.3 收起
+            // level 2 (核心全景): §1, §2, §3 展开 (expand=true)，1.1~3.3 可见但内部公式折叠 (expand=false)
+            // level 3 (微观详情): 1.1~3.3 内部定义/定理/公式卡片全部展开 (expand=true)
             if (depth === 2) {
-              node.data.expand = true; // §1, §2, §3 展开
+              node.data.expand = (level >= 2);
             } else if (depth === 3) {
-              node.data.expand = (level >= 2); // 1.1~3.3 在 level 1 下折叠子项，在 level 2 下展开
+              node.data.expand = (level >= 3);
             } else {
               node.data.expand = (level >= 3);
             }
           } else {
-            // 考点与解法体系：无章节中间层，depth 2 即为具体考点与招法
-            // level 1: 具体考点/招法展示，折叠其下属题源真题与解题步骤
-            // level 2: 展开具体考点下属的真题题源与招法下属的步骤避坑
+            // 考点与解法体系：depth 2 即为 5大考点 与 7大招法（与左翼 depth 3 的 1.1~3.3 同级）
+            // level 1 / level 2: 5大考点与7大招法卡片可见，折叠其下真题题源与解题步骤 (expand=false)
+            // level 3: 展开具体考点下属的真题题源与招法下属的步骤避坑 (expand=true)
             if (depth === 2) {
-              node.data.expand = (level >= 2);
+              node.data.expand = (level >= 3);
             } else {
               node.data.expand = (level >= 3);
             }
@@ -518,30 +527,39 @@
       }
     }
 
-    // 定向全量展开特定分类（知识点 / 考点 / 解法招法），其余分类保持 2 级概览态
+    // 定向全量展开特定分类（Q=知识点 / W=考点 / E=解法招法），非目标分支保持二级核心全景同级态，并支持连按分段巡航
     expandCategory(targetCategory) {
-      const isTargetNode = (childData) => {
-        if (!childData || !childData.data) return false;
+      const classifyBranch = (childData) => {
+        if (!childData || !childData.data) return 'other';
         const d = childData.data;
         const cat = d.category || '';
         const uid = d.uid || '';
         const text = d.text || '';
-        if (targetCategory === 'knowledge') {
-          return cat === 'knowledge' || uid === 'branch_knowledge' || uid.startsWith('sec_') || text.includes('知识') || text.startsWith('§');
+        if (cat === 'knowledge' || uid === 'branch_knowledge' || uid.startsWith('sec_') || text.includes('知识') || text.startsWith('§')) {
+          return 'knowledge';
         }
-        if (targetCategory === 'exam') {
-          return cat === 'exam' || uid === 'branch_exam_points' || uid.includes('exam') || text.includes('考点');
+        if (cat === 'exam' || uid === 'branch_exam_points' || uid.includes('exam') || text.includes('考点')) {
+          return 'exam';
         }
-        if (targetCategory === 'method') {
-          return cat === 'method' || uid === 'branch_methods' || uid === 'branch_solution_methods' || uid.includes('method') || text.includes('解法') || text.includes('招法');
+        if (cat === 'method' || uid === 'branch_methods' || uid === 'branch_solution_methods' || uid.includes('method') || text.includes('解法') || text.includes('招法')) {
+          return 'method';
         }
-        return false;
+        return 'other';
+      };
+
+      let treeModified = false;
+      const setNodeExpandFlag = (node, val) => {
+        if (!node) return;
+        if (!node.data) node.data = {};
+        if (node.data.expand !== val) {
+          node.data.expand = val;
+          treeModified = true;
+        }
       };
 
       const setSubtreeExpand = (node, expandState) => {
         if (!node) return;
-        if (!node.data) node.data = {};
-        node.data.expand = expandState;
+        setNodeExpandFlag(node, expandState);
         if (Array.isArray(node.children)) {
           node.children.forEach(child => setSubtreeExpand(child, expandState));
         }
@@ -550,35 +568,156 @@
       const treeData = this.mindMap.getData(false);
       if (!treeData) return;
 
-      if (!treeData.data) treeData.data = {};
-      treeData.data.expand = true;
+      setNodeExpandFlag(treeData, true);
 
+      let targetBranchNode = null;
       if (Array.isArray(treeData.children)) {
         treeData.children.forEach(c2 => {
           if (!c2.data) c2.data = {};
-          const isTarget = isTargetNode(c2);
-          if (isTarget) {
+          const branchType = classifyBranch(c2);
+          if (branchType === targetCategory) {
+            targetBranchNode = c2;
             // 目标分类：递归全量展开到底（各节、定理、公式、招法细节全部展开）
             setSubtreeExpand(c2, true);
           } else {
-            // 非目标分类：保持第 3 级概览态（主分支自身展开，但其下直接子节点收纳折叠）
-            c2.data.expand = true;
-            if (Array.isArray(c2.children)) {
-              c2.children.forEach(child => setSubtreeExpand(child, false));
+            // 非目标分类：严格对齐至二级核心全景态（左翼保留 1.1~3.3 可见，右翼保留 5大考点/7大招法 可见，仅折叠最末级详情叶子）
+            setNodeExpandFlag(c2, true);
+            if (branchType === 'knowledge') {
+              // 知识点分支含有 §1/§2/§3 分节层：展开 §1/§2/§3，使其下 1.1~3.3 节点可见，折叠 1.1~3.3 的内部公式
+              if (Array.isArray(c2.children)) {
+                c2.children.forEach(secNode => {
+                  setNodeExpandFlag(secNode, true);
+                  if (Array.isArray(secNode.children)) {
+                    secNode.children.forEach(kpNode => setSubtreeExpand(kpNode, false));
+                  }
+                });
+              }
+            } else {
+              // 考点与招法分支：直接子节点即为 5大考点 / 7大招法，保持其可见并折叠其内部叶子
+              if (Array.isArray(c2.children)) {
+                c2.children.forEach(child => setSubtreeExpand(child, false));
+              }
             }
           }
         });
       }
 
-      this.mindMap.setData(treeData);
-      this.mindMap.render();
+      // 构建当前分类的分段巡航序列 (Step 0 = 目标分类全树顶部定焦，后续 Step = 子分节/子分组精读定焦)
+      const cycleSteps = [];
+      if (targetBranchNode && targetBranchNode.data && targetBranchNode.data.uid) {
+        const branchUid = targetBranchNode.data.uid;
+        const directChildUids = (targetBranchNode.children || [])
+          .map(ch => ch && ch.data && ch.data.uid)
+          .filter(Boolean);
 
-      const outliner = this.options.outliner || window._outlinerInstance;
-      if (outliner && typeof outliner.setData === 'function') {
-        outliner.setData(treeData);
-        if (typeof outliner.render === 'function') outliner.render();
+        if (targetCategory === 'knowledge') {
+          cycleSteps.push({
+            stepIndex: 0,
+            label: 'knowledge_all',
+            targetRootUids: [branchUid],
+            verticalAnchor: 'top',
+            minReadableScale: 0.84,
+            maxScale: 1.02
+          });
+          directChildUids.forEach((secUid, idx) => {
+            cycleSteps.push({
+              stepIndex: idx + 1,
+              label: secUid,
+              targetRootUids: [secUid],
+              verticalAnchor: 'center',
+              minReadableScale: 0.90,
+              maxScale: 1.05
+            });
+          });
+        } else if (targetCategory === 'exam') {
+          cycleSteps.push({
+            stepIndex: 0,
+            label: 'exam_all',
+            targetRootUids: [branchUid],
+            verticalAnchor: 'center',
+            minReadableScale: 0.88,
+            maxScale: 1.02
+          });
+          if (directChildUids.length >= 4) {
+            cycleSteps.push({
+              stepIndex: 1,
+              label: 'exam_group_1',
+              targetRootUids: directChildUids.slice(0, 3),
+              verticalAnchor: 'center',
+              minReadableScale: 0.94,
+              maxScale: 1.08
+            });
+            cycleSteps.push({
+              stepIndex: 2,
+              label: 'exam_group_2',
+              targetRootUids: directChildUids.slice(3),
+              verticalAnchor: 'center',
+              minReadableScale: 0.94,
+              maxScale: 1.08
+            });
+          }
+        } else if (targetCategory === 'method') {
+          cycleSteps.push({
+            stepIndex: 0,
+            label: 'method_all',
+            targetRootUids: [branchUid],
+            verticalAnchor: 'top',
+            minReadableScale: 0.84,
+            maxScale: 1.02
+          });
+          if (directChildUids.length >= 4) {
+            cycleSteps.push({
+              stepIndex: 1,
+              label: 'method_group_1',
+              targetRootUids: directChildUids.slice(0, 3),
+              verticalAnchor: 'center',
+              minReadableScale: 0.92,
+              maxScale: 1.06
+            });
+            cycleSteps.push({
+              stepIndex: 2,
+              label: 'method_group_2',
+              targetRootUids: directChildUids.slice(3),
+              verticalAnchor: 'center',
+              minReadableScale: 0.92,
+              maxScale: 1.06
+            });
+          }
+        }
       }
-      if (typeof this.options.onLevelChange === 'function') {
+
+      if (this.categoryCycleState.category === targetCategory && !treeModified && cycleSteps.length > 1) {
+        this.categoryCycleState.stepIndex = (this.categoryCycleState.stepIndex + 1) % cycleSteps.length;
+      } else {
+        this.categoryCycleState = {
+          category: targetCategory,
+          stepIndex: 0
+        };
+      }
+
+      const activeStep = cycleSteps[this.categoryCycleState.stepIndex] || {
+        stepIndex: 0,
+        label: targetCategory,
+        targetRootUids: targetBranchNode && targetBranchNode.data ? [targetBranchNode.data.uid] : [],
+        verticalAnchor: 'auto',
+        minReadableScale: 0.84,
+        maxScale: 1.02
+      };
+
+      if (treeModified) {
+        this.mindMap.setData(treeData);
+        this.mindMap.render();
+
+        const outliner = this.options.outliner || window._outlinerInstance;
+        if (outliner && typeof outliner.setData === 'function') {
+          outliner.setData(treeData);
+          if (typeof outliner.render === 'function') outliner.render();
+        }
+      }
+
+      if (typeof this.options.onCategoryFocus === 'function') {
+        this.options.onCategoryFocus(targetCategory, activeStep, this.categoryCycleState, treeModified);
+      } else if (typeof this.options.onLevelChange === 'function') {
         this.options.onLevelChange(99);
       }
     }
@@ -604,8 +743,9 @@
       }
     }
 
-    // 全部展开
+    // 全部展开 (~/· 键 或 0 键：全图鸟瞰缩略展开)
     expandAll() {
+      this.categoryCycleState = { category: null, stepIndex: 0 };
       if (typeof this.mindMap.execCommand === 'function') {
         this.mindMap.execCommand('EXPAND_ALL');
       }
@@ -614,12 +754,13 @@
         outliner.expandAll();
       }
       if (typeof this.options.onLevelChange === 'function') {
-        this.options.onLevelChange(99);
+        this.options.onLevelChange(0);
       }
     }
 
     // 全部折叠
     collapseAll() {
+      this.categoryCycleState = { category: null, stepIndex: 0 };
       if (typeof this.mindMap.execCommand === 'function') {
         this.mindMap.execCommand('UNEXPAND_ALL');
       }
