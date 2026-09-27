@@ -422,20 +422,26 @@
 
     var rootCx = rootNode.left + rootNode.width / 2;
 
-    // 1. 上方顶点：branch_exam_points (目录组织图)
+    // 1. 上方顶点：branch_exam_points (向上离心展开目录树，中央走廊 100% 净空)
     var examExpanded = (typeof examNode.getData === 'function' ? examNode.getData('expand') : true) !== false;
     var kpList = (examExpanded && Array.isArray(examNode.children)) ? examNode.children : [];
-    var catalogBottomY = rootNode.top - 56;
+    var gapRootToExam = 44;
+    var gapExamToKp = 38;
+
+    examNode.left = rootCx - examNode.width / 2;
+    examNode.top = rootNode.top - gapRootToExam - examNode.height;
 
     if (kpList.length > 0) {
       var colWidths = [];
-      var colHeights = [];
+      var colSubHeights = [];
+      var maxKpHeight = 0;
       var indentX = 14;
       var topSubGap = 10;
       var itemSubGap = 8;
 
       for (var k = 0; k < kpList.length; k++) {
         var kp = kpList[k];
+        if (kp.height > maxKpHeight) maxKpHeight = kp.height;
         var kpExp = (typeof kp.getData === 'function' ? kp.getData('expand') : true) !== false;
         var subs = (kpExp && Array.isArray(kp.children)) ? kp.children : [];
         var maxSubW = 0;
@@ -446,30 +452,30 @@
           subH += (s === 0 ? topSubGap : itemSubGap) + sub.height;
         }
         colWidths.push(Math.max(kp.width, maxSubW));
-        colHeights.push(kp.height + subH);
+        colSubHeights.push(subH);
       }
 
       var colGap = 14;
       var totalRowW = 0;
-      var maxColH = 0;
       for (var c = 0; c < colWidths.length; c++) {
         totalRowW += colWidths[c];
-        if (colHeights[c] > maxColH) maxColH = colHeights[c];
       }
       totalRowW += Math.max(0, kpList.length - 1) * colGap;
 
-      var kpRowTop = catalogBottomY - maxColH;
-      examNode.left = rootCx - examNode.width / 2;
-      examNode.top = kpRowTop - 36 - examNode.height;
+      // 5 大考点卡片底部基准线（位于 examNode 上方 gapExamToKp 处，中央走廊彻底净空）
+      var kpRowBottom = examNode.top - gapExamToKp;
+      var kpRowTop = kpRowBottom - maxKpHeight;
 
       var curColX = rootCx - totalRowW / 2;
       for (var idx = 0; idx < kpList.length; idx++) {
         var kpNode = kpList[idx];
         kpNode.left = curColX;
         kpNode.top = kpRowTop;
+
         var isKpExp = (typeof kpNode.getData === 'function' ? kpNode.getData('expand') : true) !== false;
         if (isKpExp && Array.isArray(kpNode.children) && kpNode.children.length > 0) {
-          var curSubY = kpNode.top + kpNode.height + topSubGap;
+          // 子项向上垂直堆叠：自上而下阅读，sub[0] 在顶，sub[n-1] 邻接考点卡片上方
+          var curSubY = kpNode.top - colSubHeights[idx];
           for (var j = 0; j < kpNode.children.length; j++) {
             var subNode = kpNode.children[j];
             subNode.left = kpNode.left + indentX;
@@ -479,9 +485,6 @@
         }
         curColX += colWidths[idx] + colGap;
       }
-    } else {
-      examNode.left = rootCx - examNode.width / 2;
-      examNode.top = catalogBottomY - examNode.height;
     }
 
     // 2. 左下顶点：branch_knowledge (向左逻辑图)
@@ -565,26 +568,26 @@
         return;
       }
 
-      // 2. 上方考点主干节点 (branch_exam_points) -> 5 大核心考点水平分流总线
+      // 2. 上方考点主干节点 (branch_exam_points) -> 5 大核心考点向上分流总线
       if (uid === 'branch_exam_points') {
         var bx1 = node.left + node.width / 2;
-        var by1 = node.top + node.height;
-        var firstChildTop = node.children[0].top;
-        var yBus = by1 + (firstChildTop - by1) * 0.52;
+        var by1 = node.top;
+        var firstChildBottom = node.children[0].top + node.children[0].height;
+        var yBus = by1 + (firstChildBottom - by1) * 0.48;
         node.children.forEach(function (item, index) {
           if (!lines[index]) return;
           var bx2 = item.left + item.width / 2;
-          var by2 = item.top;
+          var by2 = item.top + item.height;
           var bPath = self.createFoldLine([[bx1, by1], [bx1, yBus], [bx2, yBus], [bx2, by2]]);
           self.setLineStyle(style, lines[index], bPath, item);
         });
         return;
       }
 
-      // 3. 考点卡片 (kp_gs01_*) -> 垂直目录缩进子项 (题源 / 要领)
+      // 3. 考点卡片 (kp_gs01_*) -> 向上垂直目录缩进子项 (题源 / 要领)
       if (getNodeSector(node) === 'top_exam') {
         var xTrunk = node.left + 7;
-        var ky1 = node.top + node.height;
+        var ky1 = node.top;
         node.children.forEach(function (item, index) {
           if (!lines[index]) return;
           var kx2 = item.left;
@@ -605,13 +608,12 @@
         var root = mm.renderer.root;
         if (mm.opt.layout === 'mindMap' && isHybridTriangleRoot(root) && node && !node.isRoot && getNodeSector(node) === 'top_exam') {
           var width = node.width;
-          var height = node.height;
           var expandBtnSize = node.expandBtnSize || 20;
           var tr = btn.transform();
           var translateX = tr.translateX || 0;
           var translateY = tr.translateY || 0;
           var targetX = (getNodeUid(node) === 'branch_exam_points' ? (width * 0.5) : 14) - expandBtnSize / 2;
-          var targetY = height + expandBtnSize / 2;
+          var targetY = -expandBtnSize / 2;
           btn.translate(targetX - translateX, targetY - translateY);
           return;
         }
@@ -624,7 +626,7 @@
       layout.renderExpandBtnRect = function (rect, expandBtnSize, width, height, node) {
         var root = mm.renderer.root;
         if (mm.opt.layout === 'mindMap' && isHybridTriangleRoot(root) && node && getNodeSector(node) === 'top_exam') {
-          rect.size(width, expandBtnSize).x(0).y(height);
+          rect.size(width, expandBtnSize).x(0).y(-expandBtnSize);
           return;
         }
         return origRenderExpandBtnRect(rect, expandBtnSize, width, height, node);

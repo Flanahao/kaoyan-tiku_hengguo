@@ -442,7 +442,7 @@ async function runTests() {
           if (headerUids.has(u) || headerUids.has(v)) headerLinkCount++;
         });
 
-        // 校验上方考点展开后，题源与要领子项在对应考点卡片正下方垂直缩进排列
+        // 校验上方考点展开后，题源与要领子项在对应考点卡片上方垂直缩进排列（向上排布，留空下方走廊）
         const kp01El = document.querySelector('#cognitiveMindMapContainer [data-node-uid="kp_gs01_01"]');
         const kp01RefEl = document.querySelector('#cognitiveMindMapContainer [data-node-uid="kp_gs01_01_ref"]');
         const kp01PathEl = document.querySelector('#cognitiveMindMapContainer [data-node-uid="kp_gs01_01_path"]');
@@ -451,8 +451,8 @@ async function runTests() {
         const rPath = kp01PathEl ? kp01PathEl.getBoundingClientRect() : null;
         const catalogVerticalStacked = Boolean(
           rKp && rRef && rPath &&
-          rRef.top >= rKp.bottom - 2 &&
-          rPath.top >= rRef.bottom - 2 &&
+          rPath.bottom <= rKp.top + 2 &&
+          rRef.bottom <= rPath.top + 2 &&
           rRef.left >= rKp.left
         );
 
@@ -893,9 +893,12 @@ async function runTests() {
           rightSemanticLevel2Kept: Boolean(kp01Card && m01Card),
           examFolded: !kp01Ref,
           scale: mm.view.scale,
+          viewX: mm.view.x,
+          viewY: mm.view.y,
           viewportCenterX: cRect.left + cRect.width / 2,
           subtreeCenterX: b.centerX || 0,
-          subtreeTopOffset: b.minY || 0
+          subtreeTopOffset: b.minY || 0,
+          b: b
         };
       })()
     `);
