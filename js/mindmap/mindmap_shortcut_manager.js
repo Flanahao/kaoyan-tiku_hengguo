@@ -658,6 +658,7 @@
             label: 'knowledge_all',
             targetRootUids: [branchUid],
             verticalAnchor: 'top',
+            horizontalAnchor: 'center',
             minReadableScale: 0.84,
             maxScale: 1.02
           });
@@ -666,17 +667,20 @@
               stepIndex: idx + 1,
               label: secUid,
               targetRootUids: [secUid],
-              verticalAnchor: 'center',
+              verticalAnchor: 'top',
+              horizontalAnchor: 'right',
               minReadableScale: 0.90,
               maxScale: 1.05
             });
           });
         } else if (targetCategory === 'exam') {
+          // 上方考点目录采用顶部对齐，彻底消除上方大片空白与底部节点挤压
           cycleSteps.push({
             stepIndex: 0,
             label: 'exam_all',
             targetRootUids: [branchUid],
-            verticalAnchor: 'center',
+            verticalAnchor: 'top',
+            horizontalAnchor: 'center',
             minReadableScale: 0.88,
             maxScale: 1.02
           });
@@ -685,7 +689,8 @@
               stepIndex: 1,
               label: 'exam_group_1',
               targetRootUids: directChildUids.slice(0, 3),
-              verticalAnchor: 'center',
+              verticalAnchor: 'top',
+              horizontalAnchor: 'center',
               minReadableScale: 0.94,
               maxScale: 1.08
             });
@@ -693,7 +698,8 @@
               stepIndex: 2,
               label: 'exam_group_2',
               targetRootUids: directChildUids.slice(3),
-              verticalAnchor: 'center',
+              verticalAnchor: 'top',
+              horizontalAnchor: 'center',
               minReadableScale: 0.94,
               maxScale: 1.08
             });
@@ -704,6 +710,7 @@
             label: 'method_all',
             targetRootUids: [branchUid],
             verticalAnchor: 'top',
+            horizontalAnchor: 'center',
             minReadableScale: 0.84,
             maxScale: 1.02
           });
@@ -712,7 +719,8 @@
               stepIndex: 1,
               label: 'method_group_1',
               targetRootUids: directChildUids.slice(0, 3),
-              verticalAnchor: 'center',
+              verticalAnchor: 'top',
+              horizontalAnchor: 'left',
               minReadableScale: 0.92,
               maxScale: 1.06
             });
@@ -720,7 +728,8 @@
               stepIndex: 2,
               label: 'method_group_2',
               targetRootUids: directChildUids.slice(3),
-              verticalAnchor: 'center',
+              verticalAnchor: 'top',
+              horizontalAnchor: 'left',
               minReadableScale: 0.92,
               maxScale: 1.06
             });

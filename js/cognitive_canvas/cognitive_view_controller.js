@@ -796,7 +796,7 @@
   }
 
   // 目标子树/全图智能相机定焦：基于 SimpleMindMap 布局树世界坐标一次性精确求解 (scale, x, y)，
-  // 排除非目标分支与离屏缓存干扰，支持可读缩放保底 (minReadableScale) 与超高分支顶部对齐
+  // 排除非目标分支与离屏缓存干扰，支持可读缩放保底 (minReadableScale)、方向性智能锚定与安全边距保底
   function fitSubtreeToViewport(targetRootUids, options) {
     if (!mindMapInstance || !mindMapInstance.view) return;
     var opts = options || {};
@@ -804,6 +804,7 @@
     var minReadableScale = typeof opts.minReadableScale === 'number' ? opts.minReadableScale : 0;
     var maxScale = typeof opts.maxScale === 'number' ? opts.maxScale : 1.08;
     var verticalAnchor = opts.verticalAnchor || 'auto'; // 'auto' | 'top' | 'center'
+    var horizontalAnchor = opts.horizontalAnchor || 'auto'; // 'auto' | 'left' | 'right' | 'center'
     var allowHorizontalOverflow = Boolean(opts.allowHorizontalOverflow);
 
     var allowedUidSet = collectSubtreeUidSet(targetRootUids);
@@ -831,23 +832,56 @@
       if (maxScale > 0 && targetScale > maxScale) {
         targetScale = maxScale;
       }
-      targetScale = Math.max(0.25, targetScale);
+      // 允许鸟瞰全景按需缩至 0.05，不再被 0.25 限制导致全图溢出视口
+      targetScale = Math.max(0.05, targetScale);
 
+      // 水平定位计算：根据目标子树生长方向与水平锚点做智能对齐
       var worldCenterX = (wb.minX + wb.maxX) / 2;
-      var worldCenterY = (wb.minY + wb.maxY) / 2;
-      var targetX = (vw / 2) - worldCenterX * targetScale;
+      var targetX;
+      if (horizontalAnchor === 'right') {
+        // 向左生长的分支（知识分节）：锚定右侧节主干，保证节标题与核心层在视口右侧完整透出，杜绝标题被顶出视口右侧
+        var safeRightPad = Math.max(70, padX);
+        targetX = (vw - safeRightPad) - wb.maxX * targetScale;
+      } else if (horizontalAnchor === 'left') {
+        // 向右生长的分支（解法招法）：锚定左侧招法主干，保证招法编号与题名在视口左侧完整透出，杜绝题名被顶出视口左侧
+        var safeLeftPad = Math.max(60, padX);
+        targetX = safeLeftPad - wb.minX * targetScale;
+      } else {
+        // 居中对齐
+        targetX = (vw / 2) - worldCenterX * targetScale;
+      }
 
+      // 垂直定位计算：
+      // 1. 若显式指定 verticalAnchor === 'top'，或 auto 模式下子树高度溢出可用高度，采用顶部安全对齐
+      // 2. 若显式指定 verticalAnchor === 'center'，以视口垂直中心为基准居中，并做双向防溢出微调
       var scaledH = wb.height * targetScale;
       var isTallSubtree = scaledH > availH + 8;
-      var shouldAlignTop = (verticalAnchor === 'top' && isTallSubtree) ||
-                           (verticalAnchor === 'auto' && minReadableScale > 0 && isTallSubtree);
+      var shouldAlignTop = (verticalAnchor === 'top') ||
+                           (verticalAnchor === 'auto' && isTallSubtree);
 
+      var worldCenterY = (wb.minY + wb.maxY) / 2;
       var targetY;
       if (shouldAlignTop) {
         targetY = topPad - wb.minY * targetScale;
       } else {
         var viewportCenterY = (topPad + (vh - bottomPad)) / 2;
         targetY = viewportCenterY - worldCenterY * targetScale;
+
+        // 垂直居中态双向防溢出优化：若底部超出视口且顶部有安全余量，向上微调使底部节点完整入屏
+        var minSafeTopCenter = 16;
+        var maxSafeBottomCenter = vh - 16;
+        var curTop = wb.minY * targetScale + targetY;
+        var curBottom = wb.maxY * targetScale + targetY;
+        if (curBottom > maxSafeBottomCenter && curTop > minSafeTopCenter) {
+          var shiftUp = Math.min(curBottom - maxSafeBottomCenter, curTop - minSafeTopCenter);
+          targetY -= shiftUp;
+        }
+      }
+
+      // 顶部安全边距严格保底：杜绝任何情况下节点卡片被顶出视口上边缘（防止负坐标切顶）
+      var minSafeTop = shouldAlignTop ? topPad : 16;
+      if (wb.minY * targetScale + targetY < minSafeTop) {
+        targetY = minSafeTop - wb.minY * targetScale;
       }
 
       mindMapInstance.view.scale = targetScale;
@@ -1538,9 +1572,9 @@
           if (lvl === 3 || lvl === 0) {
             scheduleFitView(48, { minReadableScale: 0, maxScale: 1.0, verticalAnchor: 'center' });
           } else if (lvl === 1) {
-            scheduleFitView(48, { minReadableScale: 0.90, maxScale: 1.05, verticalAnchor: 'center', allowHorizontalOverflow: true });
+            scheduleFitView(48, { minReadableScale: 0.88, maxScale: 1.05, verticalAnchor: 'center', allowHorizontalOverflow: false });
           } else {
-            scheduleFitView(48, { minReadableScale: 0.85, maxScale: 1.05, verticalAnchor: 'center', allowHorizontalOverflow: true });
+            scheduleFitView(48, { minReadableScale: 0.85, maxScale: 1.05, verticalAnchor: 'center', allowHorizontalOverflow: false });
           }
         },
         onCategoryFocus: function (targetCategory, activeStep, cycleState, treeModified) {
@@ -1551,6 +1585,7 @@
             minReadableScale: (activeStep && typeof activeStep.minReadableScale === 'number') ? activeStep.minReadableScale : 0.84,
             maxScale: (activeStep && typeof activeStep.maxScale === 'number') ? activeStep.maxScale : 1.05,
             verticalAnchor: (activeStep && activeStep.verticalAnchor) ? activeStep.verticalAnchor : 'auto',
+            horizontalAnchor: (activeStep && activeStep.horizontalAnchor) ? activeStep.horizontalAnchor : 'auto',
             allowHorizontalOverflow: (activeStep && typeof activeStep.allowHorizontalOverflow === 'boolean') ? activeStep.allowHorizontalOverflow : true
           };
           scheduleViewportAction(function () {
@@ -2032,7 +2067,11 @@
 
     if ((e.key === 'o' || e.key === 'O') && !e.ctrlKey && !e.metaKey && !e.altKey) {
       if (!isTyping) {
-        close();
+        if (typeof window.triggerOpenCognitiveView === 'function') {
+          window.triggerOpenCognitiveView();
+        } else {
+          close();
+        }
         return true;
       }
     }
