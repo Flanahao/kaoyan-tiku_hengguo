@@ -676,6 +676,43 @@
   border: none;
 }
 
+.mm-node-tag[data-tag-type="warn"],
+.mm-node-tag.mm-tag-warn {
+  background: #fff7e6;
+  color: #fa8c16;
+  border: none;
+}
+
+.mm-node-tag[data-tag-type="conclusion"],
+.mm-node-tag.mm-tag-conclusion {
+  background: #f0f5ff;
+  color: #2f54eb;
+  border: none;
+}
+
+.mm-node-tag[data-tag-type="pending"],
+.mm-node-tag.mm-tag-pending {
+  background: #fffbe6;
+  color: #d46b08;
+  border: 1px dashed #fa8c16;
+  font-weight: 700;
+}
+
+/* 同步块宿主卡片与子卡片视觉指示 */
+.mm-node-card.is-sync-block-root {
+  border-left: 3.5px solid #d46b08 !important;
+  box-shadow: 0 2px 8px rgba(212, 107, 8, 0.12) !important;
+}
+
+.mm-node-card.is-sync-block-child {
+  border-left: 2.5px dashed #ffa940 !important;
+}
+
+.mm-node-card.is-pending-node {
+  border: 1px dashed #fa8c16 !important;
+  background: #fffdf5 !important;
+}
+
 /* 尾部快捷交互胶囊 (做题直达 / 共鸣关联 / 几何图解) */
 .mm-node-action-pill {
   display: inline-flex;

@@ -1120,6 +1120,231 @@ async function runTests() {
     console.log('  PASS: 1 / 2 / 3 三阶渐进层级（含 3 键全图鸟瞰一屏居中）校验通过');
 
     // ─────────────────────────────────────────────────────────────
+    // 测试用例 10：校验跨章节同步块注水、Shift+空格转正待确认标签、双层导图接口与静默自动持久化
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[Test 10] 校验跨章节同步块注水、Shift+空格转正待确认标签、双层导图接口与静默自动持久化...');
+
+    // 10.1 校验同步块数据引擎与注水作用域挂载
+    const syncBlockCheck = await evaluate(ws, `
+      (() => {
+        const mgr = window.SyncBlockManager;
+        if (!mgr) return { ok: false, error: 'SyncBlockManager 未挂载到 window' };
+        const rootCards = document.querySelectorAll('#cognitiveMindMapContainer .is-sync-block-root');
+        const childCards = document.querySelectorAll('#cognitiveMindMapContainer .is-sync-block-child');
+        const pendingCards = document.querySelectorAll('#cognitiveMindMapContainer .is-pending-node');
+        const pendingBadges = document.querySelectorAll('#cognitiveMindMapContainer .mm-tag-pending');
+        return {
+          ok: true,
+          rootCount: rootCards.length,
+          childCount: childCards.length,
+          pendingCount: pendingCards.length,
+          pendingBadgeCount: pendingBadges.length
+        };
+      })()
+    `);
+    console.log(`  - 同步块注水检测: 根节点=${syncBlockCheck.rootCount}个, 级联子节点=${syncBlockCheck.childCount}个, 待确认节点=${syncBlockCheck.pendingCount}个, 待确认胶囊=${syncBlockCheck.pendingBadgeCount}个`);
+    if (!syncBlockCheck.ok || syncBlockCheck.rootCount === 0 || syncBlockCheck.childCount === 0 || syncBlockCheck.pendingCount === 0) {
+      throw new Error(`同步块注水或待确认节点未正确挂载: ${JSON.stringify(syncBlockCheck)}`);
+    }
+
+    // 10.2 校验 Shift + 空格一键转正待确认标签 (思维导图模式)
+    // 选中待确认节点 k_pending_comp_dom 并按下 Shift + Space
+    const confirmResultMindMap = await evaluate(ws, `
+      (() => {
+        const mm = window.CognitiveViewController.getInstance();
+        const targetCard = document.querySelector('#cognitiveMindMapContainer [data-node-uid="k_pending_comp_dom"]');
+        if (!targetCard) return { ok: false, error: '未找到待确认节点 k_pending_comp_dom' };
+        
+        let targetNode = null;
+        const walk = (node) => {
+          if (!node) return;
+          if (node.getData && node.getData('uid') === 'k_pending_comp_dom') { targetNode = node; return; }
+          if (node.children) node.children.forEach(walk);
+        };
+        walk(mm.renderer.root);
+        if (!targetNode) return { ok: false, error: '未在渲染树中找到 SimpleMindMap node 实例' };
+
+        const beforeData = JSON.parse(JSON.stringify(targetNode.getData()));
+        mm.renderer.clearActiveNodeList();
+        mm.renderer.addNodeToActiveList(targetNode);
+
+        return {
+          ok: true,
+          beforeTag: beforeData.tag,
+          beforeTagType: beforeData.tagType,
+          beforeFormalTag: beforeData.formalTag,
+          beforeFormalTagType: beforeData.formalTagType
+        };
+      })()
+    `);
+    if (!confirmResultMindMap.ok) throw new Error(confirmResultMindMap.error);
+    console.log(`  - 导图激活待确认节点: UID=k_pending_comp_dom, 转正前 tag="${confirmResultMindMap.beforeTag}", type="${confirmResultMindMap.beforeTagType}"`);
+
+    await sendCDP(ws, 'Input.dispatchKeyEvent', {
+      type: 'rawKeyDown',
+      key: ' ',
+      code: 'Space',
+      windowsVirtualKeyCode: 32,
+      modifiers: 8
+    });
+    await sendCDP(ws, 'Input.dispatchKeyEvent', {
+      type: 'keyUp',
+      key: ' ',
+      code: 'Space',
+      windowsVirtualKeyCode: 32,
+      modifiers: 8
+    });
+    await sleep(400);
+
+    const afterConfirmMindMap = await evaluate(ws, `
+      (() => {
+        const mm = window.CognitiveViewController.getInstance();
+        let targetNode = null;
+        const walk = (node) => {
+          if (!node) return;
+          if (node.getData && node.getData('uid') === 'k_pending_comp_dom') { targetNode = node; return; }
+          if (node.children) node.children.forEach(walk);
+        };
+        walk(mm.renderer.root);
+        if (!targetNode) return { ok: false, error: '未在渲染树中找到 node' };
+
+        const d = targetNode.getData();
+        const card = document.querySelector('#cognitiveMindMapContainer [data-node-uid="k_pending_comp_dom"]');
+        const badge = card ? card.querySelector('.mm-tag') : null;
+        return {
+          ok: true,
+          afterTag: d.tag,
+          afterTagType: d.tagType,
+          formalTagDeleted: d.formalTag === undefined,
+          isPendingClassRemoved: card ? !card.classList.contains('is-pending-node') : false,
+          badgeClass: badge ? badge.className : '',
+          badgeText: badge ? badge.textContent.trim() : ''
+        };
+      })()
+    `);
+    console.log(`  - Shift+空格转正后: tag="${afterConfirmMindMap.afterTag}", type="${afterConfirmMindMap.afterTagType}", DOM徽标="${afterConfirmMindMap.badgeText}", 待确认样式移除=${afterConfirmMindMap.isPendingClassRemoved}`);
+    if (!afterConfirmMindMap.ok || afterConfirmMindMap.afterTag !== '法' || afterConfirmMindMap.afterTagType !== 'method' || !afterConfirmMindMap.formalTagDeleted || !afterConfirmMindMap.isPendingClassRemoved) {
+      throw new Error(`导图模式 Shift+空格转正待确认标签失败: ${JSON.stringify(afterConfirmMindMap)}`);
+    }
+
+    // 10.3 校验静默自动持久化 (纯静默写入，无工具栏保存按钮干扰)
+    const persistenceCheck = await evaluate(ws, `
+      (() => {
+        const savedChaptersRaw = localStorage.getItem('kaoyan.g.mindmap_chapters.math_ch1');
+        const savedBlocksRaw = localStorage.getItem('kaoyan.g.mindmap_sync_blocks');
+        const bottomToolbarSaveBtn = document.querySelector('#cognitiveModal .btn-save, #cognitiveModal [data-action="save"]');
+        
+        let ch1Data = null;
+        try {
+          ch1Data = JSON.parse(savedChaptersRaw);
+        } catch (e) {}
+
+        let syncBlocks = null;
+        try {
+          syncBlocks = JSON.parse(savedBlocksRaw);
+        } catch (e) {}
+
+        let savedNodeTag = null;
+        if (ch1Data) {
+          const walk = (n) => {
+            if (!n) return;
+            if (n.data && n.data.uid === 'k_pending_comp_dom') { savedNodeTag = n.data.tag; return; }
+            if (n.children) n.children.forEach(walk);
+          };
+          walk(ch1Data);
+        }
+
+        return {
+          hasSavedChapters: Boolean(savedChaptersRaw),
+          hasSavedSyncBlocks: Boolean(savedBlocksRaw),
+          savedNodeTag: savedNodeTag,
+          syncBlockKeys: syncBlocks ? Object.keys(syncBlocks) : [],
+          pureSilentNoToolbarButton: !bottomToolbarSaveBtn
+        };
+      })()
+    `);
+    console.log(`  - 静默自动持久化检测: 章节存储=${persistenceCheck.hasSavedChapters}, 同步块存储=${persistenceCheck.hasSavedSyncBlocks} (块数量=${persistenceCheck.syncBlockKeys.length}), 转正落盘Tag="${persistenceCheck.savedNodeTag}", 纯静默无按钮=${persistenceCheck.pureSilentNoToolbarButton}`);
+    if (!persistenceCheck.hasSavedChapters || persistenceCheck.savedNodeTag !== '法' || !persistenceCheck.pureSilentNoToolbarButton) {
+      throw new Error(`静默自动持久化校验失败: ${JSON.stringify(persistenceCheck)}`);
+    }
+
+    // 10.4 校验双层导图接口预留 (L1宏观全量骨架 vs L2微观章节展开)
+    const macroTreeCheck = await evaluate(ws, `
+      (() => {
+        const ctrl = window.CognitiveViewController;
+        if (!ctrl || typeof ctrl.buildSubjectMacroTree !== 'function') {
+          return { ok: false, error: 'buildSubjectMacroTree 接口未定义' };
+        }
+        const macroTree = ctrl.buildSubjectMacroTree('math', 3);
+        if (!macroTree || !macroTree.data) return { ok: false, error: '未能生成学科宏观骨架树' };
+
+        const rootText = macroTree.data.text;
+        const ch1 = macroTree.children && macroTree.children[0];
+        const ch1Text = ch1 && ch1.data && ch1.data.text;
+        const sectors = ch1 && ch1.children ? ch1.children.map(c => c.data && c.data.text) : [];
+        
+        const knowBranch = ch1 && ch1.children ? ch1.children.find(c => c.data && c.data.uid === 'branch_knowledge') : null;
+        const sec1 = knowBranch && knowBranch.children ? knowBranch.children[0] : null;
+        const sec1Sub = sec1 && sec1.children ? sec1.children[0] : null;
+        const sec1SubChildrenCount = sec1Sub && sec1Sub.children ? sec1Sub.children.length : -1;
+
+        return {
+          ok: true,
+          rootText: rootText,
+          ch1Text: ch1Text,
+          sectors: sectors,
+          sec1SubText: sec1Sub ? sec1Sub.data.text : '',
+          sec1SubChildrenCount: sec1SubChildrenCount
+        };
+      })()
+    `);
+    console.log(`  - 双层导图宏观骨架: 学科="${macroTreeCheck.rootText}", 章节="${macroTreeCheck.ch1Text}", 扇区=[${macroTreeCheck.sectors.join(', ')}], 节点剪枝深度=${macroTreeCheck.sec1SubChildrenCount === 0 ? '已精确剪枝至1.1骨架' : '未剪枝'}`);
+    if (!macroTreeCheck.ok || !macroTreeCheck.rootText.includes('高等数学') || !macroTreeCheck.ch1Text.includes('函数与极限') || macroTreeCheck.sec1SubChildrenCount !== 0) {
+      throw new Error(`双层导图宏观骨架接口校验失败: ${JSON.stringify(macroTreeCheck)}`);
+    }
+
+    // 10.5 校验大纲模式下的 Shift + 空格转正
+    await dispatchKey(ws, 'm', 'KeyM', 77);
+    await sleep(400);
+    const outlineConfirmCheck = await evaluate(ws, `
+      (() => {
+        const outliner = (window.CognitiveViewController && window.CognitiveViewController.getOutliner()) || window._outlinerInstance;
+        if (!outliner) return { ok: false, error: '未找到大纲实例' };
+        
+        const res = outliner.confirmPendingNode('k_pending_symm_int');
+        return {
+          ok: true,
+          res: res
+        };
+      })()
+    `);
+    if (!outlineConfirmCheck.ok || !outlineConfirmCheck.res) throw new Error(outlineConfirmCheck.error || 'outliner.confirmPendingNode 返回 false');
+    await sleep(350);
+
+    const outlineAfterConfirm = await evaluate(ws, `
+      (() => {
+        const item = document.querySelector('#cognitiveOutlinerContainer [data-uid="k_pending_symm_int"]');
+        const badge = item ? item.querySelector('.outliner-node-tag, .mm-node-tag') : null;
+        return {
+          badgeText: badge ? badge.textContent.trim() : '',
+          isPending: badge ? badge.classList.contains('mm-tag-pending') : false,
+          tagType: badge ? badge.getAttribute('data-tag-type') : '',
+          badgeClass: badge ? badge.className : ''
+        };
+      })()
+    `);
+    console.log(`  - 大纲模式 Shift+空格转正: 胶囊文字="${outlineAfterConfirm.badgeText}", 待确认样式=${outlineAfterConfirm.isPending}, tagType="${outlineAfterConfirm.tagType}", class="${outlineAfterConfirm.badgeClass}"`);
+    if (outlineAfterConfirm.badgeText !== '结' || outlineAfterConfirm.isPending || outlineAfterConfirm.tagType !== 'conclusion') {
+      throw new Error(`大纲模式 Shift+空格转正失败: ${JSON.stringify(outlineAfterConfirm)}`);
+    }
+
+    // 切回思维导图模式
+    await dispatchKey(ws, 'm', 'KeyM', 77);
+    await sleep(400);
+
+    console.log('  PASS: 跨章节同步块注水、Shift+空格转正待确认标签、双层导图接口与静默自动持久化全量通过');
+
+    // ─────────────────────────────────────────────────────────────
     // 测试用例 7：顶层按 Esc / O 关闭认知视图，验证关闭后题库快捷键恢复正常
     // ─────────────────────────────────────────────────────────────
     console.log('\n[Test 7] 模拟顶层按下 Esc 关闭认知视图，并验证题库快捷键恢复...');

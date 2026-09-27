@@ -2,8 +2,8 @@
   "version": 3,
   "appName": "考研题库 (Math + 822 + English)",
   "storageEngine": "StorageEngine-SSOT",
-  "lastSaved": "2026-09-26T16:28:31.452Z",
-  "timestamp": 1790440111452,
+  "lastSaved": "2026-09-27T05:39:39.443Z",
+  "timestamp": 1790487579443,
   "data": {
     "annot_file:///D:/tj/822/%E8%80%83%E7%A0%94%E9%A2%98%E5%BA%93/%E9%A2%98%E5%BA%93/%E6%9D%8E%E8%8C%83%E5%85%A8%E4%B9%A6/%E9%AB%98%E6%95%B0/%E7%AC%AC5%E7%AB%A0%20%E4%B8%80%E5%85%83%E5%87%BD%E6%95%B0%E7%9A%84%E6%B3%B0%E5%8B%92%E5%85%AC%E5%BC%8F%E5%8F%8A%E5%85%B6%E5%BA%94%E7%94%A8/ex_5-14_solution.png": "{\"version\":3,\"width\":1378,\"height\":660,\"markers\":[{\"left\":191.3333282470703,\"top\":103.66667175292969,\"width\":957.3333740234375,\"height\":152.66665649414062,\"rotationAngle\":0,\"visualTransformMatrix\":{\"a\":1,\"b\":0,\"c\":0,\"d\":1,\"e\":0,\"f\":0},\"containerTransformMatrix\":{\"a\":1,\"b\":0,\"c\":0,\"d\":1,\"e\":0,\"f\":0},\"typeName\":\"FrameMarker\",\"strokeColor\":\"#ff0000\",\"strokeWidth\":4,\"strokeDasharray\":\"\",\"opacity\":1}]}",
     "kaoyan.g.theme": "\"light\"",
