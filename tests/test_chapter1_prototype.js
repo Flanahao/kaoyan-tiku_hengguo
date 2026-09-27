@@ -268,27 +268,57 @@ async function runTests() {
 
         const rootRect = rootCard ? rootCard.getBoundingClientRect() : null;
         const rootCenterX = rootRect ? (rootRect.left + rootRect.width / 2) : 720;
+        const rootCenterY = rootRect ? (rootRect.top + rootRect.height / 2) : 450;
 
-        // 双向同类二级节点聚拢校验：知识点全部在左翼，考点与解法全部在右翼
+        // 正品字 △ 混合结构布局校验：
+        // 1. 上方顶点：考点 (branch_exam_points, kp_gs01_01~05) 位于根节点上方，且 5 大考点呈水平目录并列
+        // 2. 左下顶点：知识点 (§1~§3) 位于根节点左下方
+        // 3. 右下顶点：招法 (m_gs01_*) 位于根节点右下方
         const sec1Rect = sec1Card ? sec1Card.getBoundingClientRect() : null;
         const sec2Rect = sec2Card ? sec2Card.getBoundingClientRect() : null;
         const sec3Rect = sec3Card ? sec3Card.getBoundingClientRect() : null;
         const kp01Rect = kp01Card ? kp01Card.getBoundingClientRect() : null;
+        const kp05Card = document.querySelector('#cognitiveMindMapContainer [data-node-uid="kp_gs01_05"]');
+        const kp05Rect = kp05Card ? kp05Card.getBoundingClientRect() : null;
         const m01Rect = method01Card ? method01Card.getBoundingClientRect() : null;
+
+        const topCatalogClustered = kp01Rect && kp05Rect && rootRect &&
+          (kp01Rect.bottom <= rootRect.top + 10) &&
+          (kp05Rect.bottom <= rootRect.top + 10) &&
+          (Math.abs(kp01Rect.top - kp05Rect.top) < 10) &&
+          (kp05Rect.left > kp01Rect.right);
 
         const leftWingClustered = sec1Rect && sec2Rect && sec3Rect &&
           (sec1Rect.right <= rootCenterX + 50) &&
           (sec2Rect.right <= rootCenterX + 50) &&
           (sec3Rect.right <= rootCenterX + 50);
 
-        const rightWingClustered = kp01Rect && m01Rect &&
-          (kp01Rect.left >= rootCenterX - 50) &&
+        const rightWingClustered = m01Rect &&
           (m01Rect.left >= rootCenterX - 50);
 
         const nexusLines = Array.from(document.querySelectorAll('#cognitiveMindMapContainer .smm-associative-line-container path.smm-associative-line-path'));
         const firstLine = nexusLines[0];
         const lineDasharray = firstLine ? window.getComputedStyle(firstLine).strokeDasharray : '';
         const lineIsSolid = !lineDasharray || lineDasharray === 'none';
+
+        // 校验二级节点卡片 (考点 / 招法 / 知识) 100% 纯白不透明底色与实体边框，且关联线图层位于节点图层下方
+        const branchKnowledgeCard = document.querySelector('#cognitiveMindMapContainer [data-node-uid="branch_knowledge"]');
+        const branchExamCard = document.querySelector('#cognitiveMindMapContainer [data-node-uid="branch_exam_points"]');
+        const branchMethodCard = document.querySelector('#cognitiveMindMapContainer [data-node-uid="branch_methods"]');
+        const examCardStyle = branchExamCard ? window.getComputedStyle(branchExamCard) : null;
+        const methodCardStyle = branchMethodCard ? window.getComputedStyle(branchMethodCard) : null;
+        const level1OpaqueWhite = examCardStyle && methodCardStyle &&
+          examCardStyle.backgroundColor === 'rgb(255, 255, 255)' &&
+          methodCardStyle.backgroundColor === 'rgb(255, 255, 255)' &&
+          examCardStyle.opacity === '1' &&
+          methodCardStyle.opacity === '1';
+
+        const assocContainer = document.querySelector('#cognitiveMindMapContainer .smm-associative-line-container');
+        const nodeContainer = document.querySelector('#cognitiveMindMapContainer .smm-node-container');
+        const assocBelowNodes = Boolean(
+          assocContainer && nodeContainer &&
+          (assocContainer.compareDocumentPosition(nodeContainer) & Node.DOCUMENT_POSITION_FOLLOWING)
+        );
 
         // 校验 3 级节点卡片实体边框与纯白底色（杜绝悬空）
         const sampleCard = document.querySelector('#cognitiveMindMapContainer [data-node-uid="sec_1_func"]');
@@ -298,10 +328,6 @@ async function runTests() {
 
         // 校验无 §2 重复字符复读
         const hasTextDuplication = Boolean(document.body.innerText.includes('§2 §2') || document.body.innerText.includes('§1 §1'));
-
-        const branchKnowledgeCard = document.querySelector('#cognitiveMindMapContainer [data-node-uid="branch_knowledge"]');
-        const branchExamCard = document.querySelector('#cognitiveMindMapContainer [data-node-uid="branch_exam_points"]');
-        const branchMethodCard = document.querySelector('#cognitiveMindMapContainer [data-node-uid="branch_methods"]');
 
         return {
           isOpen,
@@ -316,14 +342,18 @@ async function runTests() {
           hasSec2: Boolean(sec2Card),
           hasSec3: Boolean(sec3Card),
           rootCenterX,
+          rootCenterY,
           sec1Right: sec1Rect ? Math.round(sec1Rect.right) : null,
           sec2Right: sec2Rect ? Math.round(sec2Rect.right) : null,
           sec3Right: sec3Rect ? Math.round(sec3Rect.right) : null,
           scale: Number(scale.toFixed(2)),
           bounds: { minX: Math.round(minX), maxX: Math.round(maxX), minY: Math.round(minY), maxY: Math.round(maxY) },
           fitsViewport: minX >= -30 && maxX <= 1470 && minY >= -10 && maxY <= 920,
+          topCatalogClustered: Boolean(topCatalogClustered),
           leftWingClustered: Boolean(leftWingClustered),
           rightWingClustered: Boolean(rightWingClustered),
+          level1OpaqueWhite: Boolean(level1OpaqueWhite),
+          assocBelowNodes: Boolean(assocBelowNodes),
           nexusLineCount: nexusLines.length,
           lineIsSolid,
           cardHasBorder,
@@ -337,9 +367,8 @@ async function runTests() {
     console.log(`  - 二级三大分类柱存在: 知识=${overviewStats.hasBranchKnowledge}, 考点=${overviewStats.hasBranchExam}, 招法=${overviewStats.hasBranchMethod}`);
     console.log(`  - 一览全局可见紧凑节点数: ${overviewStats.visibleCardCount} 个`);
     console.log(`  - 视口自适应缩放率: ${(overviewStats.scale * 100).toFixed(0)}%`);
-    console.log(`  - rootCenterX=${overviewStats.rootCenterX}, sec1Right=${overviewStats.sec1Right}, sec2Right=${overviewStats.sec2Right}, sec3Right=${overviewStats.sec3Right}, hasSec1=${overviewStats.hasSec1}, hasSec2=${overviewStats.hasSec2}, hasSec3=${overviewStats.hasSec3}`);
-    console.log(`  - 左翼知识点聚拢 (§1/§2/§3 严格居左): ${overviewStats.leftWingClustered}`);
-    console.log(`  - 右翼考点与招法聚拢 (考点与招法严格居右): ${overviewStats.rightWingClustered}`);
+    console.log(`  - 正品字 △ 混合三角校验: 上方考点目录并列=${overviewStats.topCatalogClustered}, 左下知识聚拢=${overviewStats.leftWingClustered}, 右下招法聚拢=${overviewStats.rightWingClustered}`);
+    console.log(`  - 二级节点纯白不透明实体底色: ${overviewStats.level1OpaqueWhite}, 关联线位于节点底层: ${overviewStats.assocBelowNodes}`);
     console.log(`  - 原生跨分支拓扑关联线网数量: ${overviewStats.nexusLineCount} 条, 实线状态: ${overviewStats.lineIsSolid}`);
     console.log(`  - 节点卡片实体边框与底色: 边框=${overviewStats.cardHasBorder}, 底色=${overviewStats.cardHasBg}`);
     console.log(`  - 消除双层文本复读 (§2 §2 消除): ${!overviewStats.hasTextDuplication}`);
@@ -347,8 +376,11 @@ async function runTests() {
     if (!overviewStats.isOpen || !overviewStats.hasRoot || !overviewStats.hasBranchKnowledge || !overviewStats.hasBranchExam || !overviewStats.hasBranchMethod) {
       throw new Error('二级三大分类主支架构未能完整渲染');
     }
-    if (!overviewStats.leftWingClustered || !overviewStats.rightWingClustered) {
-      throw new Error('双向布局下同类二级节点未能在同一翼完整聚拢');
+    if (!overviewStats.topCatalogClustered || !overviewStats.leftWingClustered || !overviewStats.rightWingClustered) {
+      throw new Error(`正品字 △ 混合结构布局校验异常: top=${overviewStats.topCatalogClustered}, left=${overviewStats.leftWingClustered}, right=${overviewStats.rightWingClustered}`);
+    }
+    if (!overviewStats.level1OpaqueWhite || !overviewStats.assocBelowNodes) {
+      throw new Error(`二级节点纯白不透明或关联线底层顺序异常: opaqueWhite=${overviewStats.level1OpaqueWhite}, assocBelowNodes=${overviewStats.assocBelowNodes}`);
     }
     if (overviewStats.nexusLineCount === 0 || !overviewStats.lineIsSolid) {
       throw new Error('原生关联线网缺失或未实线化');
@@ -359,14 +391,14 @@ async function runTests() {
     if (overviewStats.hasTextDuplication) {
       throw new Error('卡片内仍存在重复标签文字连读 (如 §2 §2)');
     }
-    console.log('  PASS: 默认「一览全局」模式同类二级节点严格聚拢，原生拓扑关联线网准确呈现');
+    console.log('  PASS: 默认「一览全局」模式正品字 △ 混合结构、二级节点不透明实体化及三边关联线网准确呈现');
 
     await captureScreenshot(ws, 'chapter1_overview_level2.png');
 
     // ─────────────────────────────────────────────────────────────
-    // 测试用例 3：展开全部详情 (Level 3/4 紧凑子节点 + 无向关联线去重与根节点绕行校验)
+    // 测试用例 3：展开全部详情 (Level 3/4 紧凑子节点 + 无向关联线去重与目录子项垂直缩进校验)
     // ─────────────────────────────────────────────────────────────
-    console.log('\n[Test 3] 校验「展开详情」模式下多层紧凑子节点、无向关联线去重及中央根节点零穿越...');
+    console.log('\n[Test 3] 校验「展开详情」模式下多层紧凑子节点、无向关联线去重及上方目录垂直缩进...');
     await evaluate(ws, `window.CognitiveViewController.expandAll()`);
     await sleep(900);
 
@@ -394,21 +426,11 @@ async function runTests() {
           }
         });
 
-        // 校验全量无向关联线去重、标题节点冗余移除及中央根节点零穿越
-        const mm = window.CognitiveViewController.getInstance();
-        const rootNode = mm && mm.renderer ? mm.renderer.root : null;
-        const rootBox = rootNode ? {
-          left: rootNode.left,
-          right: rootNode.left + rootNode.width,
-          top: rootNode.top,
-          bottom: rootNode.top + rootNode.height
-        } : null;
-
+        // 校验全量无向关联线去重与标题节点冗余移除
         const visiblePaths = Array.from(document.querySelectorAll('#cognitiveMindMapContainer .smm-associative-line-container path.smm-associative-line-path'));
         const pairSet = new Set();
         let duplicatePairCount = 0;
         let headerLinkCount = 0;
-        let rootCrossingCount = 0;
         const headerUids = new Set(['branch_knowledge', 'branch_exam_points', 'branch_methods', 'sec_1_func', 'sec_2_limit', 'sec_3_cont']);
 
         visiblePaths.forEach(p => {
@@ -418,20 +440,21 @@ async function runTests() {
           if (pairSet.has(key)) duplicatePairCount++;
           pairSet.add(key);
           if (headerUids.has(u) || headerUids.has(v)) headerLinkCount++;
-
-          if (rootBox && typeof p.getTotalLength === 'function') {
-            const totalLen = p.getTotalLength();
-            let crosses = false;
-            for (let i = 0; i <= 50; i++) {
-              const pt = p.getPointAtLength((i / 50) * totalLen);
-              if (pt.x >= rootBox.left && pt.x <= rootBox.right && pt.y >= rootBox.top && pt.y <= rootBox.bottom) {
-                crosses = true;
-                break;
-              }
-            }
-            if (crosses) rootCrossingCount++;
-          }
         });
+
+        // 校验上方考点展开后，题源与要领子项在对应考点卡片正下方垂直缩进排列
+        const kp01El = document.querySelector('#cognitiveMindMapContainer [data-node-uid="kp_gs01_01"]');
+        const kp01RefEl = document.querySelector('#cognitiveMindMapContainer [data-node-uid="kp_gs01_01_ref"]');
+        const kp01PathEl = document.querySelector('#cognitiveMindMapContainer [data-node-uid="kp_gs01_01_path"]');
+        const rKp = kp01El ? kp01El.getBoundingClientRect() : null;
+        const rRef = kp01RefEl ? kp01RefEl.getBoundingClientRect() : null;
+        const rPath = kp01PathEl ? kp01PathEl.getBoundingClientRect() : null;
+        const catalogVerticalStacked = Boolean(
+          rKp && rRef && rPath &&
+          rRef.top >= rKp.bottom - 2 &&
+          rPath.top >= rRef.bottom - 2 &&
+          rRef.left >= rKp.left
+        );
 
         return {
           totalCardCount: allCards.length,
@@ -445,7 +468,7 @@ async function runTests() {
           uniquePairCount: pairSet.size,
           duplicatePairCount,
           headerLinkCount,
-          rootCrossingCount
+          catalogVerticalStacked
         };
       })()
     `);
@@ -455,7 +478,7 @@ async function runTests() {
     console.log(`  - 二级知识点节点彩标数量 (应为0纯净化): ${expandedStats.secSubNodeTags} 处`);
     console.log(`  - 尾部交互胶囊数: 真题=${expandedStats.actionPillCount}, 几何图解=${expandedStats.vizPillCount}`);
     console.log(`  - 节点内 KaTeX 数学公式数: ${expandedStats.katexCount} 处`);
-    console.log(`  - 全量无向关联线: 总数=${expandedStats.totalEdgeCount}, 唯一无向对=${expandedStats.uniquePairCount}, 重复边=${expandedStats.duplicatePairCount}, 标题冗余边=${expandedStats.headerLinkCount}, 穿越中央根节点边数=${expandedStats.rootCrossingCount}`);
+    console.log(`  - 全量无向关联线: 总数=${expandedStats.totalEdgeCount}, 唯一无向对=${expandedStats.uniquePairCount}, 重复边=${expandedStats.duplicatePairCount}, 标题冗余边=${expandedStats.headerLinkCount}, 目录垂直缩进=${expandedStats.catalogVerticalStacked}`);
 
     if (expandedStats.totalCardCount < 45 || expandedStats.tagCount < 20 || expandedStats.katexCount < 15) {
       throw new Error('全展开模式下紧凑子节点或语义标签/公式数量不足');
@@ -466,10 +489,10 @@ async function runTests() {
     if (expandedStats.duplicatePairCount > 0 || expandedStats.headerLinkCount > 0 || expandedStats.totalEdgeCount !== 19) {
       throw new Error(`无向关联线去重或标题冗余清理异常: total=${expandedStats.totalEdgeCount}, dup=${expandedStats.duplicatePairCount}, header=${expandedStats.headerLinkCount}`);
     }
-    if (expandedStats.rootCrossingCount > 0) {
-      throw new Error(`存在 ${expandedStats.rootCrossingCount} 条关联线横穿中央根节点`);
+    if (!expandedStats.catalogVerticalStacked) {
+      throw new Error('上方考点展开后，题源与要领子项未能按目录组织图垂直缩进排列');
     }
-    console.log('  PASS: 二级知识点纯净渲染、19条无向关联线零重复、零标题冗余且100%绕开中央根节点');
+    console.log('  PASS: 二级知识点纯净渲染、上方考点目录垂直缩进、19条无向关联线零重复且零标题冗余');
 
     await captureScreenshot(ws, 'chapter1_expanded_subnodes.png');
 

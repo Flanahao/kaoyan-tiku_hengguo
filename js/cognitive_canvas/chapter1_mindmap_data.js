@@ -451,45 +451,6 @@
           },
           {
             data: {
-              text: "分左右极限判存在性与求值",
-              uid: "m_gs01_02",
-              tag: "M02 单侧",
-              tagType: "method",
-              resonanceLinks: ["kp_gs01_03", "kp_gs01_05"],
-              expand: false
-            },
-            children: [
-              {
-                data: {
-                  text: "识别信号为含 $e^{1/x}$、$\\arctan\\frac{1}{x}$、$|x|$ 或分段点，逐侧计算左右极限",
-                  uid: "m_gs01_02_ol",
-                  tag: "要领",
-                  tagType: "method"
-                },
-                children: []
-              },
-              {
-                data: {
-                  text: "定位敏感点，分别计算左极限 $A_- = f(x_0-0)$ 与右极限 $A_+ = f(x_0+0)$",
-                  uid: "m_gs01_02_s1",
-                  tag: "步骤",
-                  tagType: "step"
-                },
-                children: []
-              },
-              {
-                data: {
-                  text: "$e^{1/x}$ 在 $x\\to 0^+$ 时为 $+\\infty$，在 $x\\to 0^-$ 时为 $0$，切勿两侧合并计算",
-                  uid: "m_gs01_02_pf",
-                  tag: "避坑",
-                  tagType: "pitfall"
-                },
-                children: []
-              }
-            ]
-          },
-          {
-            data: {
               text: "展开定阶与逐阶匹配系数",
               uid: "m_gs01_16",
               tag: "M16 定阶",
@@ -520,6 +481,45 @@
                 data: {
                   text: "未知参数位于分母或幂指内部时，须先同乘或取对数化为 $e^{g\\ln f}$ 再配系数",
                   uid: "m_gs01_16_pf",
+                  tag: "避坑",
+                  tagType: "pitfall"
+                },
+                children: []
+              }
+            ]
+          },
+          {
+            data: {
+              text: "分左右极限判存在性与求值",
+              uid: "m_gs01_02",
+              tag: "M02 单侧",
+              tagType: "method",
+              resonanceLinks: ["kp_gs01_03", "kp_gs01_05"],
+              expand: false
+            },
+            children: [
+              {
+                data: {
+                  text: "识别信号为含 $e^{1/x}$、$\\arctan\\frac{1}{x}$、$|x|$ 或分段点，逐侧计算左右极限",
+                  uid: "m_gs01_02_ol",
+                  tag: "要领",
+                  tagType: "method"
+                },
+                children: []
+              },
+              {
+                data: {
+                  text: "定位敏感点，分别计算左极限 $A_- = f(x_0-0)$ 与右极限 $A_+ = f(x_0+0)$",
+                  uid: "m_gs01_02_s1",
+                  tag: "步骤",
+                  tagType: "step"
+                },
+                children: []
+              },
+              {
+                data: {
+                  text: "$e^{1/x}$ 在 $x\\to 0^+$ 时为 $+\\infty$，在 $x\\to 0^-$ 时为 $0$，切勿两侧合并计算",
+                  uid: "m_gs01_02_pf",
                   tag: "避坑",
                   tagType: "pitfall"
                 },

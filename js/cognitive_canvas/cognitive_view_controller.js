@@ -20,6 +20,8 @@
   var mindMapInstance = null;
   var isModalOpen = false;
   var activeResonanceUid = null;
+  var hoveredResonanceUid = null;
+  var hoveredEdgePair = null;
   var activeLinesLayer = null;
   var isAssociativeLineVisible = true;
   var pendingFitOnRender = false;
@@ -39,6 +41,356 @@
 
   function checkIsActive() {
     return Boolean(isModalOpen);
+  }
+
+  function getNodeUid(node) {
+    if (!node) return '';
+    if (typeof node.getData === 'function') {
+      var u = node.getData('uid');
+      if (u) return u;
+    }
+    if (node.nodeData && node.nodeData.data && node.nodeData.data.uid) {
+      return node.nodeData.data.uid;
+    }
+    if (node.data && node.data.uid) {
+      return node.data.uid;
+    }
+    return '';
+  }
+
+  // 判定节点所属的混合三角扇区: 'top_exam' (上方考点目录图) | 'left_know' (左下知识逻辑图) | 'right_method' (右下招法逻辑图)
+  function getNodeSector(node) {
+    var cur = node;
+    while (cur) {
+      var uid = getNodeUid(cur);
+      if (uid === 'branch_exam_points' || uid.indexOf('kp_') === 0) return 'top_exam';
+      if (uid === 'branch_knowledge' || uid.indexOf('sec_') === 0 || uid.indexOf('k_') === 0) return 'left_know';
+      if (uid === 'branch_methods' || uid.indexOf('m_') === 0) return 'right_method';
+      cur = cur.parent;
+    }
+    if (node && node.dir === 'left') return 'left_know';
+    return 'right_method';
+  }
+
+  function isHybridTriangleRoot(rootNode) {
+    if (!rootNode || !Array.isArray(rootNode.children) || rootNode.children.length < 3) return false;
+    var hasExam = false, hasKnow = false, hasMethod = false;
+    for (var i = 0; i < rootNode.children.length; i++) {
+      var u = getNodeUid(rootNode.children[i]);
+      if (u === 'branch_exam_points') hasExam = true;
+      else if (u === 'branch_knowledge') hasKnow = true;
+      else if (u === 'branch_methods') hasMethod = true;
+    }
+    return hasExam && hasKnow && hasMethod;
+  }
+
+  function measureNodeSubtreeBox(node) {
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    function walk(n) {
+      if (!n) return;
+      if (typeof n.left === 'number' && typeof n.top === 'number' && n.width > 0 && n.height > 0) {
+        if (n.left < minX) minX = n.left;
+        if (n.top < minY) minY = n.top;
+        if (n.left + n.width > maxX) maxX = n.left + n.width;
+        if (n.top + n.height > maxY) maxY = n.top + n.height;
+      }
+      var expanded = (typeof n.getData === 'function' ? n.getData('expand') : true) !== false;
+      if (expanded && Array.isArray(n.children)) {
+        for (var i = 0; i < n.children.length; i++) {
+          walk(n.children[i]);
+        }
+      }
+    }
+    walk(node);
+    if (!isFinite(minX)) {
+      return { minX: 0, minY: 0, maxX: 0, maxY: 0, width: 0, height: 0 };
+    }
+    return {
+      minX: minX,
+      minY: minY,
+      maxX: maxX,
+      maxY: maxY,
+      width: maxX - minX,
+      height: maxY - minY
+    };
+  }
+
+  function shiftNodeSubtree(node, dx, dy) {
+    if (!node) return;
+    if (typeof node.left === 'number') node.left += dx;
+    if (typeof node.top === 'number') node.top += dy;
+    if (Array.isArray(node.children)) {
+      for (var i = 0; i < node.children.length; i++) {
+        shiftNodeSubtree(node.children[i], dx, dy);
+      }
+    }
+  }
+
+  function layoutLeftLogicHorizontal(knowNode, rightEdgeX) {
+    if (!knowNode) return;
+    knowNode.dir = 'left';
+    knowNode.left = rightEdgeX - knowNode.width;
+    function walkChildren(parent, depth) {
+      var expanded = (typeof parent.getData === 'function' ? parent.getData('expand') : true) !== false;
+      if (!expanded || !Array.isArray(parent.children)) return;
+      var gapX = depth === 1 ? 56 : (depth === 2 ? 62 : 38);
+      for (var i = 0; i < parent.children.length; i++) {
+        var child = parent.children[i];
+        child.dir = 'left';
+        child.left = parent.left - gapX - child.width;
+        walkChildren(child, depth + 1);
+      }
+    }
+    walkChildren(knowNode, 1);
+  }
+
+  function layoutRightLogicHorizontal(methodNode, leftEdgeX) {
+    if (!methodNode) return;
+    methodNode.dir = 'right';
+    methodNode.left = leftEdgeX;
+    function walkChildren(parent, depth) {
+      var expanded = (typeof parent.getData === 'function' ? parent.getData('expand') : true) !== false;
+      if (!expanded || !Array.isArray(parent.children)) return;
+      var gapX = depth === 1 ? 56 : 42;
+      for (var i = 0; i < parent.children.length; i++) {
+        var child = parent.children[i];
+        child.dir = 'right';
+        child.left = parent.left + parent.width + gapX;
+        walkChildren(child, depth + 1);
+      }
+    }
+    walkChildren(methodNode, 1);
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 正品字 △ 混合结构三角布局引擎 (Hybrid Triangle Layout)
+  // 上方顶点：核心考点与题源 (目录组织图 catalogOrganization，水平并列 + 垂直缩进子项)
+  // 左下顶点：核心知识点体系 (向左逻辑图，右端口面向中央与底边走廊)
+  // 右下顶点：解法流程与招法 (向右逻辑图，左端口面向中央与底边走廊)
+  // ─────────────────────────────────────────────────────────────
+  function applyHybridTriangleLayout(rootNode) {
+    if (!isHybridTriangleRoot(rootNode)) return;
+
+    var examNode = null, knowNode = null, methodNode = null;
+    for (var i = 0; i < rootNode.children.length; i++) {
+      var ch = rootNode.children[i];
+      var u = getNodeUid(ch);
+      if (u === 'branch_exam_points') examNode = ch;
+      else if (u === 'branch_knowledge') knowNode = ch;
+      else if (u === 'branch_methods') methodNode = ch;
+    }
+    if (!examNode || !knowNode || !methodNode) return;
+
+    var rootCx = rootNode.left + rootNode.width / 2;
+
+    // 1. 上方顶点：branch_exam_points (目录组织图)
+    var examExpanded = (typeof examNode.getData === 'function' ? examNode.getData('expand') : true) !== false;
+    var kpList = (examExpanded && Array.isArray(examNode.children)) ? examNode.children : [];
+    var catalogBottomY = rootNode.top - 56;
+
+    if (kpList.length > 0) {
+      var colWidths = [];
+      var colHeights = [];
+      var indentX = 14;
+      var topSubGap = 10;
+      var itemSubGap = 8;
+
+      for (var k = 0; k < kpList.length; k++) {
+        var kp = kpList[k];
+        var kpExp = (typeof kp.getData === 'function' ? kp.getData('expand') : true) !== false;
+        var subs = (kpExp && Array.isArray(kp.children)) ? kp.children : [];
+        var maxSubW = 0;
+        var subH = 0;
+        for (var s = 0; s < subs.length; s++) {
+          var sub = subs[s];
+          if (indentX + sub.width > maxSubW) maxSubW = indentX + sub.width;
+          subH += (s === 0 ? topSubGap : itemSubGap) + sub.height;
+        }
+        colWidths.push(Math.max(kp.width, maxSubW));
+        colHeights.push(kp.height + subH);
+      }
+
+      var colGap = 14;
+      var totalRowW = 0;
+      var maxColH = 0;
+      for (var c = 0; c < colWidths.length; c++) {
+        totalRowW += colWidths[c];
+        if (colHeights[c] > maxColH) maxColH = colHeights[c];
+      }
+      totalRowW += Math.max(0, kpList.length - 1) * colGap;
+
+      var kpRowTop = catalogBottomY - maxColH;
+      examNode.left = rootCx - examNode.width / 2;
+      examNode.top = kpRowTop - 36 - examNode.height;
+
+      var curColX = rootCx - totalRowW / 2;
+      for (var idx = 0; idx < kpList.length; idx++) {
+        var kpNode = kpList[idx];
+        kpNode.left = curColX;
+        kpNode.top = kpRowTop;
+        var isKpExp = (typeof kpNode.getData === 'function' ? kpNode.getData('expand') : true) !== false;
+        if (isKpExp && Array.isArray(kpNode.children) && kpNode.children.length > 0) {
+          var curSubY = kpNode.top + kpNode.height + topSubGap;
+          for (var j = 0; j < kpNode.children.length; j++) {
+            var subNode = kpNode.children[j];
+            subNode.left = kpNode.left + indentX;
+            subNode.top = curSubY;
+            curSubY += subNode.height + itemSubGap;
+          }
+        }
+        curColX += colWidths[idx] + colGap;
+      }
+    } else {
+      examNode.left = rootCx - examNode.width / 2;
+      examNode.top = catalogBottomY - examNode.height;
+    }
+
+    // 2. 左下顶点：branch_knowledge (向左逻辑图)
+    layoutLeftLogicHorizontal(knowNode, rootNode.left - 64);
+    var kBox = measureNodeSubtreeBox(knowNode);
+    var targetWingTopY = rootNode.top - 16;
+    shiftNodeSubtree(knowNode, 0, targetWingTopY - kBox.minY);
+
+    // 3. 右下顶点：branch_methods (向右逻辑图)
+    layoutRightLogicHorizontal(methodNode, rootNode.left + rootNode.width + 64);
+    var mBox = measureNodeSubtreeBox(methodNode);
+    shiftNodeSubtree(methodNode, 0, targetWingTopY - mBox.minY);
+  }
+
+  function installHybridTriangleLayoutHook(mm) {
+    if (!mm || !mm.renderer || !mm.renderer.layout) return;
+    var layout = mm.renderer.layout;
+    if (layout._hasHybridTriangleHook) return;
+    layout._hasHybridTriangleHook = true;
+
+    var origDoLayout = layout.doLayout.bind(layout);
+    layout.doLayout = function (callback) {
+      origDoLayout(function (root) {
+        if (mm.opt.layout === 'mindMap' && isHybridTriangleRoot(root)) {
+          applyHybridTriangleLayout(root);
+        }
+        if (typeof callback === 'function') {
+          callback(root);
+        }
+      });
+    };
+
+    var origRenderLine = layout.renderLine.bind(layout);
+    layout.renderLine = function (node, lines, style, lineStyle) {
+      var root = mm.renderer.root;
+      if (mm.opt.layout !== 'mindMap' || !isHybridTriangleRoot(root)) {
+        return origRenderLine(node, lines, style, lineStyle);
+      }
+      if (!node || !Array.isArray(node.children) || node.children.length <= 0) {
+        return [];
+      }
+
+      var uid = getNodeUid(node);
+      var self = this;
+
+      // 1. 中央根节点 -> 上方考点 / 左下知识 / 右下招法
+      if (node.isRoot) {
+        var rootCx = node.left + node.width / 2;
+        var rootCy = node.top + node.height / 2;
+        node.children.forEach(function (item, index) {
+          if (!lines[index]) return;
+          var itemUid = getNodeUid(item);
+          var path = '';
+          if (itemUid === 'branch_exam_points') {
+            var x1 = rootCx;
+            var y1 = node.top;
+            var x2 = item.left + item.width / 2;
+            var y2 = item.top + item.height;
+            path = 'M ' + x1 + ',' + y1 + ' L ' + x2 + ',' + y2;
+          } else if (itemUid === 'branch_knowledge' || item.dir === 'left') {
+            var lx1 = node.left;
+            var ly1 = rootCy;
+            var lx2 = item.left + item.width;
+            var ly2 = item.top + item.height / 2;
+            var lMidX = lx1 - (lx1 - lx2) * 0.5;
+            path = (lineStyle === 'curve' && typeof self.cubicBezierPath === 'function')
+              ? self.cubicBezierPath(lx1, ly1, lx2, ly2)
+              : self.createFoldLine([[lx1, ly1], [lMidX, ly1], [lMidX, ly2], [lx2, ly2]]);
+          } else {
+            var rx1 = node.left + node.width;
+            var ry1 = rootCy;
+            var rx2 = item.left;
+            var ry2 = item.top + item.height / 2;
+            var rMidX = rx1 + (rx2 - rx1) * 0.5;
+            path = (lineStyle === 'curve' && typeof self.cubicBezierPath === 'function')
+              ? self.cubicBezierPath(rx1, ry1, rx2, ry2)
+              : self.createFoldLine([[rx1, ry1], [rMidX, ry1], [rMidX, ry2], [rx2, ry2]]);
+          }
+          self.setLineStyle(style, lines[index], path, item);
+        });
+        return;
+      }
+
+      // 2. 上方考点主干节点 (branch_exam_points) -> 5 大核心考点水平分流总线
+      if (uid === 'branch_exam_points') {
+        var bx1 = node.left + node.width / 2;
+        var by1 = node.top + node.height;
+        var firstChildTop = node.children[0].top;
+        var yBus = by1 + (firstChildTop - by1) * 0.52;
+        node.children.forEach(function (item, index) {
+          if (!lines[index]) return;
+          var bx2 = item.left + item.width / 2;
+          var by2 = item.top;
+          var bPath = self.createFoldLine([[bx1, by1], [bx1, yBus], [bx2, yBus], [bx2, by2]]);
+          self.setLineStyle(style, lines[index], bPath, item);
+        });
+        return;
+      }
+
+      // 3. 考点卡片 (kp_gs01_*) -> 垂直目录缩进子项 (题源 / 要领)
+      if (getNodeSector(node) === 'top_exam') {
+        var xTrunk = node.left + 7;
+        var ky1 = node.top + node.height;
+        node.children.forEach(function (item, index) {
+          if (!lines[index]) return;
+          var kx2 = item.left;
+          var ky2 = item.top + item.height / 2;
+          var kPath = self.createFoldLine([[xTrunk, ky1], [xTrunk, ky2], [kx2, ky2]]);
+          self.setLineStyle(style, lines[index], kPath, item);
+        });
+        return;
+      }
+
+      // 4. 左下知识树与右下招法树：使用原生逻辑图连线
+      return origRenderLine(node, lines, style, lineStyle);
+    };
+
+    if (typeof layout.renderExpandBtn === 'function') {
+      var origRenderExpandBtn = layout.renderExpandBtn.bind(layout);
+      layout.renderExpandBtn = function (node, btn) {
+        var root = mm.renderer.root;
+        if (mm.opt.layout === 'mindMap' && isHybridTriangleRoot(root) && node && !node.isRoot && getNodeSector(node) === 'top_exam') {
+          var width = node.width;
+          var height = node.height;
+          var expandBtnSize = node.expandBtnSize || 20;
+          var tr = btn.transform();
+          var translateX = tr.translateX || 0;
+          var translateY = tr.translateY || 0;
+          var targetX = (getNodeUid(node) === 'branch_exam_points' ? (width * 0.5) : 14) - expandBtnSize / 2;
+          var targetY = height + expandBtnSize / 2;
+          btn.translate(targetX - translateX, targetY - translateY);
+          return;
+        }
+        return origRenderExpandBtn(node, btn);
+      };
+    }
+
+    if (typeof layout.renderExpandBtnRect === 'function') {
+      var origRenderExpandBtnRect = layout.renderExpandBtnRect.bind(layout);
+      layout.renderExpandBtnRect = function (rect, expandBtnSize, width, height, node) {
+        var root = mm.renderer.root;
+        if (mm.opt.layout === 'mindMap' && isHybridTriangleRoot(root) && node && getNodeSector(node) === 'top_exam') {
+          rect.size(width, expandBtnSize).x(0).y(height);
+          return;
+        }
+        return origRenderExpandBtnRect(rect, expandBtnSize, width, height, node);
+      };
+    }
   }
 
   // 二级节点语义分类与左右双翼干预：同一类的二级节点必须严格聚拢
@@ -350,14 +702,14 @@
         shape: 'rectangle',
         marginX: 46,
         marginY: 12,
-        fillColor: '#eff0f1',
+        fillColor: '#ffffff',
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
         color: '#1f2329',
         fontSize: 13,
         fontWeight: '600',
         borderColor: 'transparent',
         borderWidth: 0,
-        borderRadius: 6,
+        borderRadius: 8,
         hoverRectColor: '#3370ff',
         paddingX: 12,
         paddingY: 6
@@ -415,8 +767,10 @@
   }
 
   // ─────────────────────────────────────────────────────────────
-  // SimpleMindMap 原生关联线系统深度优化：多端口解耦、立体外扩立交桥分流与点击穿透
-  // 彻底杜绝连线汇聚单点重叠、悬空穿模与点击产生水平控制线圆圈手柄
+  // SimpleMindMap 原生关联线系统深度优化：
+  // 1. 强制关联线图层位于节点卡片层下方 (.smm-associative-line-container < .smm-node-container)
+  // 2. 正品字 △ 三边自然分流 (左斜边: 上方考点↔左下知识 / 右斜边: 上方考点↔右下招法 / 底边: 左下知识↔右下招法)
+  // 3. 移除生硬禁区束腰钳制，采用多端口同心扇出避免交点扎堆与同列掉头
   // ─────────────────────────────────────────────────────────────
   function installAssociativeLineEnhancer(AssociativeLineProto) {
     if (!AssociativeLineProto || AssociativeLineProto._hasCognitiveEnhancement) return;
@@ -444,6 +798,16 @@
       this.removeAllLines();
       this.removeControls();
       this.clearActiveLine();
+
+      // 确保关联线图层位于节点图层下方，避免连线压在卡片文字正面引起半透明错觉
+      if (this.associativeLineDraw && this.associativeLineDraw.node &&
+          this.mindMap && this.mindMap.nodeDraw && this.mindMap.nodeDraw.node) {
+        var assocEl = this.associativeLineDraw.node;
+        var nodeDrawEl = this.mindMap.nodeDraw.node;
+        if (assocEl.parentNode && assocEl.parentNode === nodeDrawEl.parentNode && assocEl.nextSibling !== nodeDrawEl) {
+          nodeDrawEl.parentNode.insertBefore(assocEl, nodeDrawEl);
+        }
+      }
 
       var tree = this.mindMap.renderer.root;
       if (!tree) return;
@@ -484,11 +848,40 @@
             : (e.toUid + '<->' + e.fromUid);
           if (seenUndirectedPairs.has(pairKey)) return;
           seenUndirectedPairs.add(pairKey);
+
+          var secA = getNodeSector(e.fromNode);
+          var secB = getNodeSector(toNode);
+          var srcNode = e.fromNode;
+          var dstNode = toNode;
+          var srcUid = e.fromUid;
+          var dstUid = e.toUid;
+          var srcSector = secA;
+          var dstSector = secB;
+
+          // 归一化边方向：上方考点 (top_exam) 始终作为起点，或底边左下知识 (left_know) 作为起点
+          if (secB === 'top_exam' && secA !== 'top_exam') {
+            srcNode = toNode;
+            dstNode = e.fromNode;
+            srcUid = e.toUid;
+            dstUid = e.fromUid;
+            srcSector = secB;
+            dstSector = secA;
+          } else if (secA === 'right_method' && secB === 'left_know') {
+            srcNode = toNode;
+            dstNode = e.fromNode;
+            srcUid = e.toUid;
+            dstUid = e.fromUid;
+            srcSector = secB;
+            dstSector = secA;
+          }
+
           validEdges.push({
-            fromNode: e.fromNode,
-            toNode: toNode,
-            fromUid: e.fromUid,
-            toUid: e.toUid,
+            fromNode: srcNode,
+            toNode: dstNode,
+            fromUid: srcUid,
+            toUid: dstUid,
+            srcSector: srcSector,
+            dstSector: dstSector,
             pairKey: pairKey
           });
         }
@@ -496,212 +889,170 @@
 
       if (validEdges.length === 0) return;
 
-      var rootCenterX = tree.left + tree.width / 2;
-      var rootCenterY = tree.top + tree.height / 2;
-
-      // 计算中央核心禁区（覆盖中央根节点与紧邻的一级知识主干节点），防止跨翼连线横穿中央根节点
-      var branchKnowledgeNode = idToNode.get('branch_knowledge');
-      var centralLeft = (branchKnowledgeNode ? Math.min(tree.left, branchKnowledgeNode.left) : tree.left) - 18;
-      var centralRight = tree.left + tree.width + 22;
-      var centralTop = (branchKnowledgeNode ? Math.min(tree.top, branchKnowledgeNode.top) : tree.top) - 22;
-      var centralBottom = (branchKnowledgeNode
-        ? Math.max(tree.top + tree.height, branchKnowledgeNode.top + branchKnowledgeNode.height)
-        : (tree.top + tree.height)) + 22;
-
-      // 1. 多端口锚点分配 (Multi-Port Anchor Distribution)
-      var nodePortsMap = new Map();
-      validEdges.forEach(function (edge) {
-        var fromN = edge.fromNode;
-        var toN = edge.toNode;
-        if (!nodePortsMap.has(fromN)) nodePortsMap.set(fromN, []);
-        if (!nodePortsMap.has(toN)) nodePortsMap.set(toN, []);
-
-        nodePortsMap.get(fromN).push({
-          edge: edge,
-          isFrom: true,
-          otherY: toN.top + toN.height / 2
-        });
-        nodePortsMap.get(toN).push({
-          edge: edge,
-          isFrom: false,
-          otherY: fromN.top + fromN.height / 2
-        });
-      });
-
-      var portOffsetMap = new Map();
-      nodePortsMap.forEach(function (portList, node) {
-        portList.sort(function (a, b) { return a.otherY - b.otherY; });
-        var total = portList.length;
-        var maxOffset = Math.min(12, Math.max(4, (node.height * 0.4) / Math.max(1, total)));
-        portList.forEach(function (p, idx) {
-          var offset = total === 1 ? 0 : ((idx - (total - 1) / 2) * maxOffset);
-          var key = p.edge.fromUid + '->' + p.edge.toUid + ':' + (p.isFrom ? 'from' : 'to');
-          portOffsetMap.set(key, offset);
-        });
-      });
-
-      // 2. 预计算每条边的端点与分类（右翼同侧 / 左翼同侧 / 跨翼上方走廊 / 跨翼下方走廊）以分配无冲突立交车道
-      var rightWingEdges = [];
-      var leftWingEdges = [];
-      var crossUpperEdges = [];
-      var crossLowerEdges = [];
+      // 1. 多端口拓扑分配：按上方考点底边框、左下知识右边框、右下招法左边框分别排序，杜绝同心扇出交叉
+      var examPortGroups = new Map();
+      var sidePortsMap = new Map();
 
       validEdges.forEach(function (edge) {
-        var fromNode = edge.fromNode;
-        var toNode = edge.toNode;
-        var fromUid = edge.fromUid;
-        var toUid = edge.toUid;
-
-        var fromCenterX = fromNode.left + fromNode.width / 2;
-        var toCenterX = toNode.left + toNode.width / 2;
-        var fromIsLeft = fromCenterX < rootCenterX;
-        var toIsLeft = toCenterX < rootCenterX;
-
-        var fromOffset = portOffsetMap.get(fromUid + '->' + toUid + ':from') || 0;
-        var toOffset = portOffsetMap.get(fromUid + '->' + toUid + ':to') || 0;
-
-        edge.startY = fromNode.top + fromNode.height / 2 + fromOffset;
-        edge.endY = toNode.top + toNode.height / 2 + toOffset;
-        edge.fromIsLeft = fromIsLeft;
-        edge.toIsLeft = toIsLeft;
-        edge.dy = Math.abs(edge.startY - edge.endY);
-        edge.midY = (edge.startY + edge.endY) / 2;
-
-        if (!fromIsLeft && !toIsLeft) {
-          rightWingEdges.push(edge);
-        } else if (fromIsLeft && toIsLeft) {
-          leftWingEdges.push(edge);
-        } else {
-          if (edge.midY <= rootCenterY) {
-            crossUpperEdges.push(edge);
-          } else {
-            crossLowerEdges.push(edge);
+        if (edge.srcSector === 'top_exam') {
+          if (!examPortGroups.has(edge.fromNode)) {
+            examPortGroups.set(edge.fromNode, { toKnow: [], toMethod: [] });
           }
+          var grp = examPortGroups.get(edge.fromNode);
+          if (edge.dstSector === 'left_know') {
+            grp.toKnow.push(edge);
+          } else {
+            grp.toMethod.push(edge);
+          }
+        } else {
+          if (!sidePortsMap.has(edge.fromNode)) sidePortsMap.set(edge.fromNode, []);
+          sidePortsMap.get(edge.fromNode).push({
+            edge: edge,
+            isFrom: true,
+            otherSector: edge.dstSector,
+            otherX: edge.toNode.left + edge.toNode.width / 2,
+            otherY: edge.toNode.top + edge.toNode.height / 2
+          });
+        }
+
+        if (edge.dstSector !== 'top_exam') {
+          if (!sidePortsMap.has(edge.toNode)) sidePortsMap.set(edge.toNode, []);
+          sidePortsMap.get(edge.toNode).push({
+            edge: edge,
+            isFrom: false,
+            otherSector: edge.srcSector,
+            otherX: edge.fromNode.left + edge.fromNode.width / 2,
+            otherY: edge.fromNode.top + edge.fromNode.height / 2
+          });
         }
       });
 
-      // 同翼边按纵向跨度从小到大排序：短跨度在内侧、长跨度在外侧，减少交叉
-      rightWingEdges.sort(function (a, b) { return a.dy - b.dy; });
-      rightWingEdges.forEach(function (e, idx) { e.wingRank = idx; });
+      // 1a. 为上方考点节点 (kp_gs01_*) 分配底边框左右分流端口 X 坐标
+      examPortGroups.forEach(function (grp, kpNode) {
+        var kpBottomY = kpNode.top + kpNode.height;
+        var kpCenterX = kpNode.left + kpNode.width / 2;
 
-      leftWingEdges.sort(function (a, b) { return a.dy - b.dy; });
-      leftWingEdges.forEach(function (e, idx) { e.wingRank = idx; });
+        // 发往左下知识节点的端口：目标 Y 越小越靠左，目标 Y 越大越靠右（外圈包内圈，零交叉）
+        grp.toKnow.sort(function (a, b) {
+          return (a.toNode.top + a.toNode.height / 2) - (b.toNode.top + b.toNode.height / 2);
+        });
+        var knowLen = grp.toKnow.length;
+        var avgKnowRightX = knowLen > 0
+          ? grp.toKnow.reduce(function (s, e) { return s + e.toNode.left + e.toNode.width; }, 0) / knowLen
+          : kpNode.left;
+        var leftAnchorX = Math.max(
+          kpNode.left + kpNode.width * 0.28,
+          Math.min(kpNode.left + kpNode.width * 0.62, avgKnowRightX + 34)
+        );
+        var knowPortStep = 12;
+        grp.toKnow.forEach(function (e, idx) {
+          var offset = knowLen === 1 ? 0 : ((idx - (knowLen - 1) / 2) * knowPortStep);
+          e.startX = leftAnchorX + offset;
+          e.startY = kpBottomY;
+          e.examFanIndex = idx;
+        });
 
-      // 跨翼上方走廊：平均高度越靠近根节点中心，分配越靠近内侧的走廊车道
-      crossUpperEdges.sort(function (a, b) { return b.midY - a.midY; });
-      crossUpperEdges.forEach(function (e, idx) { e.corridorRank = idx; e.passAbove = true; });
+        // 发往右下招法节点的端口：若考点在招法左侧，目标 Y 越大越靠左、越小越靠右（同心嵌套零交叉）
+        grp.toMethod.sort(function (a, b) {
+          var ay = a.toNode.top + a.toNode.height / 2;
+          var by = b.toNode.top + b.toNode.height / 2;
+          var mLeft = a.toNode.left;
+          return kpCenterX <= mLeft ? (by - ay) : (ay - by);
+        });
+        var methodLen = grp.toMethod.length;
+        var rightAnchorX = Math.max(
+          knowLen > 0 ? (leftAnchorX + 26) : (kpNode.left + kpNode.width * 0.52),
+          kpNode.left + kpNode.width * 0.68
+        );
+        var methodPortStep = 11;
+        grp.toMethod.forEach(function (e, idx) {
+          var offset = methodLen === 1 ? 0 : ((idx - (methodLen - 1) / 2) * methodPortStep);
+          e.startX = Math.min(kpNode.left + kpNode.width - 10, rightAnchorX + offset);
+          e.startY = kpBottomY;
+          e.examFanIndex = idx;
+        });
+      });
 
-      // 跨翼下方走廊：平均高度越靠近根节点中心，分配越靠近内侧的走廊车道
-      crossLowerEdges.sort(function (a, b) { return a.midY - b.midY; });
-      crossLowerEdges.forEach(function (e, idx) { e.corridorRank = idx; e.passAbove = false; });
+      // 1b. 为左下知识节点 (右边框) 与右下招法节点 (左边框) 分配纵向端口 Y 坐标
+      sidePortsMap.forEach(function (portList, node) {
+        var nodeSector = getNodeSector(node);
+        portList.sort(function (a, b) {
+          // 来自上方考点的连线排在上半区，水平底边连线排在下半区
+          var aFromTop = a.otherSector === 'top_exam' ? 0 : 1;
+          var bFromTop = b.otherSector === 'top_exam' ? 0 : 1;
+          if (aFromTop !== bFromTop) return aFromTop - bFromTop;
+          if (a.otherSector === 'top_exam') {
+            return nodeSector === 'left_know' ? (a.otherX - b.otherX) : (b.otherX - a.otherX);
+          }
+          return a.otherY - b.otherY;
+        });
+
+        var total = portList.length;
+        var stepY = Math.min(8, Math.max(4, (node.height * 0.52) / Math.max(1, total)));
+        var centerY = node.top + node.height / 2;
+        portList.forEach(function (p, idx) {
+          var offsetY = total === 1 ? 0 : ((idx - (total - 1) / 2) * stepY);
+          var portY = centerY + offsetY;
+          var portX = nodeSector === 'left_know' ? (node.left + node.width) : node.left;
+          if (p.isFrom) {
+            p.edge.startX = portX;
+            p.edge.startY = portY;
+            p.edge.sidePortIndex = idx;
+          } else {
+            p.edge.endX = portX;
+            p.edge.endY = portY;
+            p.edge.sidePortIndex = idx;
+          }
+        });
+      });
 
       var self = this;
 
+      // 2. 绘制三边自然贝塞尔流线
       validEdges.forEach(function (edge) {
         var fromNode = edge.fromNode;
         var toNode = edge.toNode;
         var fromUid = edge.fromUid;
         var toUid = edge.toUid;
-        var fromIsLeft = edge.fromIsLeft;
-        var toIsLeft = edge.toIsLeft;
 
-        var startX, startY, endX, endY, cx1, cy1, cx2, cy2;
+        var startX = typeof edge.startX === 'number' ? edge.startX : (fromNode.left + fromNode.width);
+        var startY = typeof edge.startY === 'number' ? edge.startY : (fromNode.top + fromNode.height / 2);
+        var endX = typeof edge.endX === 'number' ? edge.endX : toNode.left;
+        var endY = typeof edge.endY === 'number' ? edge.endY : (toNode.top + toNode.height / 2);
+        var cx1, cy1, cx2, cy2;
 
-        startY = edge.startY;
-        endY = edge.endY;
-
-        if (!fromIsLeft && !toIsLeft) {
-          // 同在右翼（例如考点 kp -> 招法 m）：从卡片左边框连接，向左侧走廊紧凑外扩，且绝不侵入中央根节点
-          startX = fromNode.left;
-          endX = toNode.left;
-          var rankR = edge.wingRank || 0;
-          var laneWidth = Math.min(110, Math.max(24, edge.dy * 0.14) + rankR * 8);
-          var minAllowedCx = centralRight + 14;
-          cx1 = Math.max(minAllowedCx, Math.min(startX, endX) - laneWidth);
-          cy1 = startY;
-          cx2 = cx1;
+        if (edge.srcSector === 'top_exam' && edge.dstSector === 'left_know') {
+          // 三角形左斜边流：上方考点底端口 -> 左下知识右端口
+          var dyL = Math.max(44, endY - startY);
+          var fanIdxL = (edge.examFanIndex || 0) + (edge.sidePortIndex || 0);
+          var channelRightShift = 46 + Math.max(0, (startX - endX) * 0.20) + fanIdxL * 12;
+          cx1 = startX;
+          cy1 = startY + Math.min(115, dyL * 0.44);
+          cx2 = endX + channelRightShift;
           cy2 = endY;
-        } else if (fromIsLeft && toIsLeft) {
-          // 同在左翼：从卡片右边框连接，向右侧走廊紧凑外扩，且绝不侵入中央禁区
-          startX = fromNode.left + fromNode.width;
-          endX = toNode.left + toNode.width;
-          var rankL = edge.wingRank || 0;
-          var laneWidthLeft = Math.min(110, Math.max(24, edge.dy * 0.14) + rankL * 8);
-          var maxAllowedCx = centralLeft - 14;
-          cx1 = Math.min(maxAllowedCx, Math.max(startX, endX) + laneWidthLeft);
+        } else if (edge.srcSector === 'top_exam' && edge.dstSector === 'right_method') {
+          // 三角形右斜边流：上方考点底端口 -> 右下招法左端口
+          var dyR = Math.max(44, endY - startY);
+          var fanIdxR = (edge.sidePortIndex || 0);
+          var channelLeftShift = 46 + Math.max(0, (endX - startX) * 0.20) + fanIdxR * 10;
+          cx1 = startX;
+          cy1 = startY + Math.min(115, dyR * 0.44);
+          cx2 = endX - channelLeftShift;
+          cy2 = endY;
+        } else if (edge.srcSector === 'left_know' && edge.dstSector === 'right_method') {
+          // 三角形水平底边流：左下知识右端口 -> 右下招法左端口 (Sugiyama 零交叉单调平行流)
+          var spanX = Math.max(80, endX - startX);
+          cx1 = startX + spanX * 0.36;
           cy1 = startY;
-          cx2 = cx1;
+          cx2 = endX - spanX * 0.36;
           cy2 = endY;
         } else {
-          // 跨翼连接 (左翼 <-> 右翼)：绕行中央根节点上/下方立交走廊
-          if (!fromIsLeft && toIsLeft) {
-            startX = fromNode.left;
-            endX = toNode.left + toNode.width;
-          } else {
-            startX = fromNode.left + fromNode.width;
-            endX = toNode.left;
-          }
-
-          var spanX = endX - startX;
-          cx1 = startX + spanX * 0.38;
-          cx2 = startX + spanX * 0.62;
+          // 兜底同侧或普通连接
+          var dx = endX - startX;
+          cx1 = startX + dx * 0.38;
           cy1 = startY;
+          cx2 = startX + dx * 0.62;
           cy2 = endY;
-
-          var cRank = edge.corridorRank || 0;
-          var laneGap = 12;
-
-          if (edge.passAbove) {
-            var targetTop = centralTop - cRank * laneGap;
-            var requiredControlY = Infinity;
-            var hitsCentralX = false;
-            for (var step = 1; step < 20; step++) {
-              var t = step / 20;
-              var mt = 1 - t;
-              var xt = mt * mt * mt * startX + 3 * mt * mt * t * cx1 + 3 * mt * t * t * cx2 + t * t * t * endX;
-              if (xt >= centralLeft && xt <= centralRight) {
-                hitsCentralX = true;
-                var baseYt = mt * mt * mt * startY + t * t * t * endY;
-                var wt = 3 * mt * t;
-                var boundY = (targetTop - baseYt) / wt;
-                if (boundY < requiredControlY) {
-                  requiredControlY = boundY;
-                }
-              }
-            }
-            if (hitsCentralX && isFinite(requiredControlY)) {
-              var naturalCy = (startY + endY) / 2;
-              if (requiredControlY < naturalCy) {
-                cy1 = requiredControlY;
-                cy2 = requiredControlY;
-              }
-            }
-          } else {
-            var targetBottom = centralBottom + cRank * laneGap;
-            var requiredControlYBottom = -Infinity;
-            var hitsCentralXBottom = false;
-            for (var stepB = 1; stepB < 20; stepB++) {
-              var tB = stepB / 20;
-              var mtB = 1 - tB;
-              var xtB = mtB * mtB * mtB * startX + 3 * mtB * mtB * tB * cx1 + 3 * mtB * tB * tB * cx2 + tB * tB * tB * endX;
-              if (xtB >= centralLeft && xtB <= centralRight) {
-                hitsCentralXBottom = true;
-                var baseYtB = mtB * mtB * mtB * startY + tB * tB * tB * endY;
-                var wtB = 3 * mtB * tB;
-                var boundYB = (targetBottom - baseYtB) / wtB;
-                if (boundYB > requiredControlYBottom) {
-                  requiredControlYBottom = boundYB;
-                }
-              }
-            }
-            if (hitsCentralXBottom && isFinite(requiredControlYBottom)) {
-              var naturalCyB = (startY + endY) / 2;
-              if (requiredControlYBottom > naturalCyB) {
-                cy1 = requiredControlYBottom;
-                cy2 = requiredControlYBottom;
-              }
-            }
-          }
         }
 
         var pathStr = 'M ' + startX.toFixed(1) + ' ' + startY.toFixed(1) +
@@ -709,12 +1060,12 @@
                       cx2.toFixed(1) + ' ' + cy2.toFixed(1) + ', ' +
                       endX.toFixed(1) + ' ' + endY.toFixed(1);
 
-        // 真实可视线条 (实线无箭头、微带圆角)
+        // 真实可视线条 (实线无箭头、底层柔和呈现)
         var path = self.associativeLineDraw.path();
         path.plot(pathStr);
         path.stroke({
-          width: 1.6,
-          color: '#3370ff'
+          width: 1.45,
+          color: '#4068eb'
         }).fill({
           color: 'none'
         });
@@ -725,7 +1076,7 @@
           path.node.style.strokeDasharray = 'none';
         }
 
-        // 宽截面点击感应区 (16px 点击判定区，无形有质，点击触发共鸣聚焦)
+        // 宽截面点击与悬停感应区 (16px 判定区)
         var clickPath = self.associativeLineDraw.path();
         clickPath.plot(pathStr);
         clickPath.stroke({
@@ -739,6 +1090,14 @@
           clickPath.node.setAttribute('data-from-uid', fromUid);
           clickPath.node.setAttribute('data-to-uid', toUid);
           clickPath.node.style.cursor = 'pointer';
+          clickPath.node.addEventListener('mouseenter', function () {
+            hoveredEdgePair = { from: fromUid, to: toUid };
+            syncAssociativeLinesState();
+          });
+          clickPath.node.addEventListener('mouseleave', function () {
+            hoveredEdgePair = null;
+            syncAssociativeLinesState();
+          });
         }
 
         // 点击连线本身唤醒聚焦共鸣
@@ -815,8 +1174,9 @@
     mindMapInstance = new MindMap({
       el: container,
       data: initialData,
-      layout: 'mindMap', // 双向平衡发散布局（左：最终笔记知识底座，右：核心考点与解法招法）
+      layout: 'mindMap', // 正品字 △ 混合结构三角布局（上方：考点目录组织图，左下：知识向左逻辑图，右下：招法向右逻辑图）
       theme: 'cognitive_modern',
+      associativeLineIsAlwaysAboveNode: false, // 关联线严格处于节点卡片下方，杜绝连线压在节点文字表面造成半透明感
       enableFreeDrag: false,
       autoMoveWhenMouseInEdgeOnDrag: true,
       useLeftKeySelectionRightKeyDrag: true, // 空白处左键框选，右键拖拽平移画布
@@ -840,6 +1200,32 @@
       }
     });
 
+    installHybridTriangleLayoutHook(mindMapInstance);
+    mindMapInstance.on('layout_change', function () {
+      installHybridTriangleLayoutHook(mindMapInstance);
+    });
+
+    // 悬停有关联线的节点卡片时，高亮其关联线（无点击锁定时生效）
+    container.addEventListener('mouseover', function (e) {
+      var card = e.target && e.target.closest ? e.target.closest('.mm-node-card') : null;
+      var uid = card ? (card.getAttribute('data-node-uid') || '') : '';
+      if (uid && uid !== hoveredResonanceUid) {
+        var t = getTargetsByUid(uid);
+        hoveredResonanceUid = (Array.isArray(t) && t.length > 0) ? uid : null;
+        syncAssociativeLinesState();
+      } else if (!uid && hoveredResonanceUid) {
+        hoveredResonanceUid = null;
+        syncAssociativeLinesState();
+      }
+    });
+    container.addEventListener('mouseleave', function () {
+      if (hoveredResonanceUid || hoveredEdgePair) {
+        hoveredResonanceUid = null;
+        hoveredEdgePair = null;
+        syncAssociativeLinesState();
+      }
+    });
+
     // 监听原生缩放事件，同步更新底栏比例显示
     mindMapInstance.on('scale', function (scale) {
       if (structureController && typeof structureController.updateZoomDisplay === 'function') {
@@ -847,7 +1233,7 @@
       }
     });
 
-    // 确保双向布局下同一类的二级节点严格聚拢在一起（左侧为 §1/§2/§3 知识点，右侧为核心考点与解法流程）
+    // 确保双向布局下同一类的二级节点严格聚拢在一起
     if (mindMapInstance.mindMapLayoutPro) {
       mindMapInstance.mindMapLayoutPro.restore();
       mindMapInstance.mindMapLayoutPro.updateNodeTree = function (tree) {
@@ -862,6 +1248,7 @@
 
       applySemanticClustering(mindMapInstance.getData(false));
       mindMapInstance.mindMapLayoutPro.updateRenderTree();
+      installHybridTriangleLayoutHook(mindMapInstance);
       mindMapInstance.render();
     }
 
@@ -1198,16 +1585,50 @@
     if (!activeResonanceUid) {
       lineContainer.classList.remove('has-active-selection');
       visiblePaths.forEach(function (p) {
-        p.classList.remove('is-active-line');
+        p.classList.remove('is-active-line', 'is-hover-line');
       });
+
+      if (isAssociativeLineVisible && (hoveredEdgePair || hoveredResonanceUid)) {
+        if (hoveredEdgePair) {
+          lineContainer.classList.add('has-hover-selection');
+          visiblePaths.forEach(function (p) {
+            var f = p.getAttribute('data-from-uid');
+            var t = p.getAttribute('data-to-uid');
+            if ((f === hoveredEdgePair.from && t === hoveredEdgePair.to) ||
+                (f === hoveredEdgePair.to && t === hoveredEdgePair.from)) {
+              p.classList.add('is-hover-line');
+            }
+          });
+        } else if (hoveredResonanceUid) {
+          var hTargets = new Set(getTargetsByUid(hoveredResonanceUid));
+          if (hTargets.size > 0) {
+            lineContainer.classList.add('has-hover-selection');
+            visiblePaths.forEach(function (p) {
+              var f = p.getAttribute('data-from-uid');
+              var t = p.getAttribute('data-to-uid');
+              if (f === hoveredResonanceUid || t === hoveredResonanceUid ||
+                  (f === hoveredResonanceUid && hTargets.has(t)) ||
+                  (t === hoveredResonanceUid && hTargets.has(f))) {
+                p.classList.add('is-hover-line');
+              }
+            });
+          } else {
+            lineContainer.classList.remove('has-hover-selection');
+          }
+        }
+      } else {
+        lineContainer.classList.remove('has-hover-selection');
+      }
       return;
     }
 
+    lineContainer.classList.remove('has-hover-selection');
     lineContainer.classList.add('has-active-selection');
     var targets = getTargetsByUid(activeResonanceUid);
     var targetSet = new Set(targets);
 
     visiblePaths.forEach(function (p) {
+      p.classList.remove('is-hover-line');
       var from = p.getAttribute('data-from-uid');
       var to = p.getAttribute('data-to-uid');
       var isConnected = (from === activeResonanceUid && targetSet.has(to)) ||

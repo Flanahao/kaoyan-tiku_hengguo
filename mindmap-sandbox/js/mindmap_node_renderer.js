@@ -79,6 +79,9 @@
     if (role) {
       cardClasses += ` role-${role}`;
     }
+    if (rawData.uid && /^kp_gs\d+_\d+_/.test(rawData.uid)) {
+      cardClasses += ' mm-catalog-leaf';
+    }
     const rawResonanceTargets = rawData.associativeLineTargets || rawData.resonanceLinks;
     const resonanceTargets = Array.isArray(rawResonanceTargets)
       ? Array.from(new Set(rawResonanceTargets.filter(uid => uid && uid !== rawData.uid)))

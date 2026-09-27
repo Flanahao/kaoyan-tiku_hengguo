@@ -261,11 +261,22 @@
   filter: drop-shadow(0 2px 6px rgba(51, 112, 255, 0.45));
 }
 
-/* 常态显示状态下的层级区分 */
+/* 常态显示状态下的层级区分：常态柔和降噪，悬停/聚焦高亮激活 */
 .smm-associative-line-container:not(.is-global-muted) path.smm-associative-line-path {
-  opacity: 0.65;
-  stroke: #3370ff;
-  stroke-width: 1.6px;
+  opacity: 0.38;
+  stroke: #4068eb;
+  stroke-width: 1.45px;
+}
+
+.smm-associative-line-container:not(.is-global-muted).has-hover-selection:not(.has-active-selection) path.smm-associative-line-path:not(.is-hover-line) {
+  opacity: 0.16 !important;
+}
+
+.smm-associative-line-container:not(.is-global-muted).has-hover-selection:not(.has-active-selection) path.smm-associative-line-path.is-hover-line {
+  opacity: 0.96 !important;
+  stroke: #3370ff !important;
+  stroke-width: 2.2px !important;
+  filter: drop-shadow(0 2px 5px rgba(51, 112, 255, 0.35));
 }
 
 .smm-associative-line-container:not(.is-global-muted).has-active-selection path.smm-associative-line-path:not(.is-active-line) {

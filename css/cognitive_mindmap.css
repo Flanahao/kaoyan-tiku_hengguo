@@ -502,34 +502,91 @@
   box-shadow: 0 4px 12px rgba(51, 112, 255, 0.25);
 }
 
-/* 二级节点卡片: 浅灰底色 */
+/* 二级主干节点卡片 (知识 / 考点 / 招法): 100% 纯白不透明实体底色 + 清晰分类边框 + 立体阴影 */
 .mm-node-card.level-1 {
-  background: #eff0f1;
-  color: #1f2329;
-  padding: 6px 12px;
-  border-radius: 6px;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  opacity: 1 !important;
+  color: #1f2329 !important;
+  padding: 7px 14px;
+  border-radius: 8px;
   font-size: 14px;
-  font-weight: 500;
-  border: 1px solid rgba(31, 35, 41, 0.05);
+  font-weight: 600;
+  border: 1.5px solid #cbd5e1 !important;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.mm-node-card.level-1[data-node-uid="branch_exam_points"] {
+  border-color: rgba(207, 19, 34, 0.36) !important;
+  box-shadow: 0 3px 12px rgba(207, 19, 34, 0.09), 0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.mm-node-card.level-1[data-node-uid="branch_knowledge"] {
+  border-color: rgba(22, 93, 255, 0.36) !important;
+  box-shadow: 0 3px 12px rgba(22, 93, 255, 0.09), 0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.mm-node-card.level-1[data-node-uid="branch_methods"] {
+  border-color: rgba(0, 154, 41, 0.36) !important;
+  box-shadow: 0 3px 12px rgba(0, 154, 41, 0.09), 0 1px 3px rgba(15, 23, 42, 0.05);
 }
 
 /* 三级及叶子节点卡片: 实体卡片与精致边框，确保关联线端点物理着陆且无悬空感 */
 .mm-node-card.level-2,
 .mm-node-card:not(.level-0):not(.level-1) {
   background: #ffffff !important;
+  background-color: #ffffff !important;
+  opacity: 1;
   color: #1f2329 !important;
   padding: 4px 10px 4px 8px;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 400;
   border: 1px solid rgba(31, 35, 41, 0.16) !important;
-  box-shadow: 0 1px 3px rgba(31, 35, 41, 0.04);
+  box-shadow: 0 1px 3px rgba(31, 35, 41, 0.05);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+.mm-node-card.role-section {
+  border: 1.5px solid rgba(22, 93, 255, 0.26) !important;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, 0.06);
+  font-weight: 600;
+}
+
+.mm-node-card[data-node-uid^="kp_gs01_"]:not(.mm-catalog-leaf) {
+  max-width: 246px;
+  white-space: normal !important;
+  flex-wrap: wrap !important;
+  border: 1.25px solid rgba(207, 19, 34, 0.24) !important;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+  padding: 6px 10px !important;
+  gap: 4px 6px;
+  line-height: 1.35;
+}
+
+/* 顶部考点目录组织图：题源与要领子卡片采用紧凑多行目录卡片，匹配父考点列宽 */
+.mm-node-card.mm-catalog-leaf {
+  max-width: 232px;
+  white-space: normal !important;
+  align-items: flex-start !important;
+  padding: 5px 9px !important;
+  line-height: 1.4;
+}
+
+.mm-node-card.mm-catalog-leaf .mm-node-content {
+  white-space: normal !important;
+  flex-wrap: wrap !important;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.mm-node-card.mm-catalog-leaf .mm-node-tag {
+  margin-top: 2px;
+}
+
 .mm-node-card:not(.level-0):not(.level-1):hover {
-  border-color: #3370ff;
-  box-shadow: 0 2px 8px rgba(51, 112, 255, 0.12);
+  border-color: #3370ff !important;
+  box-shadow: 0 2px 8px rgba(51, 112, 255, 0.14);
 }
 
 /* 卡片内部正文布局与中轴对齐 */
