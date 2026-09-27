@@ -917,9 +917,7 @@
         outliner: outliner,
         onLevelChange: function (lvl) {
           updateLevelButtonsUI(lvl);
-          if (lvl === 3) {
-            scheduleFitView(48, { minReadableScale: 0.76, maxScale: 1.0, verticalAnchor: 'top', allowHorizontalOverflow: true });
-          } else if (lvl === 0) {
+          if (lvl === 3 || lvl === 0) {
             scheduleFitView(48, { minReadableScale: 0, maxScale: 1.0, verticalAnchor: 'center' });
           } else {
             scheduleFitView(48, { minReadableScale: 0.85, maxScale: 1.05, verticalAnchor: 'center' });
@@ -1384,14 +1382,8 @@
       }
     }
 
-    var isBackquoteKey = (e.code === 'Backquote' || e.key === '`' || e.key === '~' || e.key === '·');
-
-    // 快捷键单键系统 (~/·, 1, 2, 3, Q, W, E, L，兼容 0) - 非打字编辑态下直接单键极速触发
+    // 快捷键单键系统 (1, 2, 3, Q, W, E, L) - 非打字编辑态下直接单键极速触发
     if (!isTyping && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      if (isBackquoteKey || (!e.shiftKey && e.key === '0')) {
-        expandAll();
-        return true;
-      }
       if (!e.shiftKey) {
         if (e.key === '1') {
           expandToLevel(1); // 1 键：分节骨架（左至 §1~§3，右至考点/招法标题）
@@ -1402,7 +1394,7 @@
           return true;
         }
         if (e.key === '3') {
-          expandToLevel(3); // 3 键：全量微观详情展开 + 可读保底缩放聚焦
+          expandToLevel(3); // 3 键：全图全量展开 + 一屏鸟瞰居中
           return true;
         }
         var k = (e.key || '').toLowerCase();
@@ -1431,9 +1423,8 @@
       }
     }
 
-    // 兼容 Alt + ~/· / 1 / 2 / 3 / 0 / Q / W / E 组合键
+    // 兼容 Alt + 1 / 2 / 3 / Q / W / E 组合键
     if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && !isTyping) {
-      if (isBackquoteKey || e.key === '0') { expandAll(); return true; }
       if (e.key === '1') { expandToLevel(1); return true; }
       if (e.key === '2') { expandToLevel(2); return true; }
       if (e.key === '3') { expandToLevel(3); return true; }

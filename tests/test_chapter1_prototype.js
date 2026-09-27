@@ -1061,7 +1061,7 @@ async function runTests() {
       throw new Error(`单键 2 (Level 2 核心全景) 行为异常: ${JSON.stringify(key2State)}`);
     }
 
-    // 6. 单键 3 (Level 3 — 微观精读): 展开全部微观卡片，同时启用 76% 可读字号保底 + 顶部对齐
+    // 6. 单键 3 (Level 3 — 全图全量展开 · 一屏鸟瞰): 展开全部 101 个节点并一屏完整居中收纳
     await dispatchKey(ws, '3', 'Digit3', 51);
     await sleep(600);
     const key3State = await evaluate(ws, `
@@ -1073,10 +1073,11 @@ async function runTests() {
         const kp01Ref = document.querySelector('#cognitiveMindMapContainer [data-node-uid="kp_gs01_01_ref"]');
         const m01Step = document.querySelector('#cognitiveMindMapContainer [data-node-uid="m_gs01_01_s1"]');
         const cards = Array.from(document.querySelectorAll('#cognitiveMindMapContainer .smm-node-container .mm-node-card'));
-        let minY = Infinity;
+        let minX = Infinity, maxX = -Infinity;
         cards.forEach(c => {
           const r = c.getBoundingClientRect();
-          if (r.top < minY) minY = r.top;
+          if (r.left < minX) minX = r.left;
+          if (r.right > maxX) maxX = r.right;
         });
         return {
           sec1LeafVisible: Boolean(sec1Leaf),
@@ -1084,34 +1085,16 @@ async function runTests() {
           m01StepVisible: Boolean(m01Step),
           totalCards: cards.length,
           scale: mm.view.scale,
-          topOffset: minY - cRect.top
+          centerDiffX: Math.abs((minX + maxX) / 2 - (cRect.left + cRect.width / 2))
         };
       })()
     `);
-    console.log(`  - 单键 3 (Level 3 微观精读): 节点数=${key3State.totalCards}, 缩放=${(key3State.scale * 100).toFixed(0)}% (保底>=72%), 顶部边距=${key3State.topOffset.toFixed(1)}px`);
-    if (!key3State.sec1LeafVisible || !key3State.kp01RefVisible || !key3State.m01StepVisible || key3State.scale < 0.72 || key3State.topOffset < 15 || key3State.topOffset > 95) {
-      throw new Error(`单键 3 (Level 3 微观精读) 行为异常: ${JSON.stringify(key3State)}`);
+    console.log(`  - 单键 3 (Level 3 全图鸟瞰): 节点数=${key3State.totalCards}, 鸟瞰缩放=${(key3State.scale * 100).toFixed(0)}%, 水平居中偏差=${key3State.centerDiffX.toFixed(1)}px`);
+    if (!key3State.sec1LeafVisible || !key3State.kp01RefVisible || !key3State.m01StepVisible || key3State.totalCards < 100 || key3State.scale >= 0.65 || key3State.centerDiffX > 40) {
+      throw new Error(`单键 3 (Level 3 全图鸟瞰) 行为异常: ${JSON.stringify(key3State)}`);
     }
     await captureScreenshot(ws, 'chapter1_level3_readable_focus.png');
-
-    // 7. 单键 ~ / · (Backquote, 键盘 1 左侧 — 全图鸟瞰): 101 节点全展开并一屏完整收纳
-    await dispatchKey(ws, '`', 'Backquote', 192);
-    await sleep(600);
-    const backquoteState = await evaluate(ws, `
-      (() => {
-        const mm = window.CognitiveViewController.getInstance();
-        const cards = Array.from(document.querySelectorAll('#cognitiveMindMapContainer .smm-node-container .mm-node-card'));
-        return {
-          totalCards: cards.length,
-          scale: mm.view.scale
-        };
-      })()
-    `);
-    console.log(`  - 单键 ~ / · (Backquote 全图鸟瞰): 节点数=${backquoteState.totalCards}, 鸟瞰缩放=${(backquoteState.scale * 100).toFixed(0)}%`);
-    if (backquoteState.totalCards < 100 || backquoteState.scale >= 0.65) {
-      throw new Error(`单键 ~ / · (Backquote 全图鸟瞰) 行为异常: ${JSON.stringify(backquoteState)}`);
-    }
-    console.log('  PASS: ~/1/2/3 四阶渐进层级与可读字号保底 + 顶部对齐校验通过');
+    console.log('  PASS: 1 / 2 / 3 三阶渐进层级（含 3 键全图鸟瞰一屏居中）校验通过');
 
     // ─────────────────────────────────────────────────────────────
     // 测试用例 7：顶层按 Esc / O 关闭认知视图，验证关闭后题库快捷键恢复正常

@@ -67,8 +67,7 @@
             <div class="shortcut-item"><span>聚焦解题方法 (连按巡航招法)</span><kbd>E</kbd></div>
             <div class="shortcut-item"><span>分节骨架 (左至§1~§3)</span><kbd>1</kbd></div>
             <div class="shortcut-item"><span>核心全景 (同级对齐总览)</span><kbd>2</kbd></div>
-            <div class="shortcut-item"><span>微观精读 (全展开可读聚焦)</span><kbd>3</kbd></div>
-            <div class="shortcut-item"><span>全图鸟瞰 (展开全部节点)</span><kbd>~ / ·</kbd></div>
+            <div class="shortcut-item"><span>全图鸟瞰 (展开全部节点)</span><kbd>3</kbd></div>
             <div class="shortcut-item"><span>展开/折叠当前节点</span><kbd>Alt + .</kbd></div>
             <div class="shortcut-item"><span>复制 / 创建副本</span><kbd>Ctrl + C / Ctrl + D</kbd></div>
           </div>

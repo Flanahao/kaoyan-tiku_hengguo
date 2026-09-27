@@ -159,21 +159,17 @@
           }
         }
 
-        const isBackquoteKey = (e.code === 'Backquote' || e.key === '`' || e.key === '~' || e.key === '·');
-
-        // 2.1 单键层级概览与分类巡航展开 (~/·, 1, 2, 3, Q, W, E, L，兼容 0) - 非编辑/打字态下直接生效
+        // 2.1 单键层级概览与分类巡航展开 (1, 2, 3, Q, W, E, L) - 非编辑/打字态下直接生效
         if (!isEditing && !e.altKey && !e.ctrlKey && !e.metaKey) {
-          if (isBackquoteKey || (!e.shiftKey && (e.key === '1' || e.key === '2' || e.key === '3' || e.key === '0'))) {
+          if (!e.shiftKey && (e.key === '1' || e.key === '2' || e.key === '3')) {
             e.preventDefault();
             e.stopPropagation();
-            if (isBackquoteKey || e.key === '0') {
-              this.expandAll(); // ~/· 键 (1键左侧)：全图鸟瞰展开全部节点
-            } else if (e.key === '1') {
+            if (e.key === '1') {
               this.expandToLevel(1); // 1 键：分节骨架（左至 §1~§3，右至考点/招法标题）
             } else if (e.key === '2') {
               this.expandToLevel(2); // 2 键：核心全景（左至 1.1~3.3，右至考点/招法，同级对齐）
             } else if (e.key === '3') {
-              this.expandToLevel(3); // 3 键：全量微观详情展开 + 可读保底缩放聚焦
+              this.expandToLevel(3); // 3 键：全图全量展开 + 一屏鸟瞰居中
             }
             return;
           }
@@ -209,13 +205,12 @@
           }
         }
 
-        // 兼容 Alt + ~/· / 1 / 2 / 3 / 0 / Q / W / E
+        // 兼容 Alt + 1 / 2 / 3 / Q / W / E
         if (!isEditing && e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-          if (isBackquoteKey || e.key === '1' || e.key === '2' || e.key === '3' || e.key === '0') {
+          if (e.key === '1' || e.key === '2' || e.key === '3') {
             e.preventDefault();
             e.stopPropagation();
-            if (isBackquoteKey || e.key === '0') this.expandAll();
-            else if (e.key === '1') this.expandToLevel(1);
+            if (e.key === '1') this.expandToLevel(1);
             else if (e.key === '2') this.expandToLevel(2);
             else if (e.key === '3') this.expandToLevel(3);
             return;
