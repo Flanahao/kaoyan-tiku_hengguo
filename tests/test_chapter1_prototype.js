@@ -884,7 +884,7 @@ async function runTests() {
             if (r.right > maxX) maxX = r.right;
             if (r.bottom > maxY) maxY = r.bottom;
           });
-          return { centerX: (minX + maxX) / 2, minY: minY - cRect.top, height: maxY - minY };
+          return { minX, minY: minY - cRect.top, maxX, rightMargin: cRect.right - maxX, centerX: (minX + maxX) / 2, height: maxY - minY };
         };
         const b = measureBranch('branch_knowledge');
         return {
@@ -898,16 +898,17 @@ async function runTests() {
           viewportCenterX: cRect.left + cRect.width / 2,
           subtreeCenterX: b.centerX || 0,
           subtreeTopOffset: b.minY || 0,
+          rightMargin: b.rightMargin,
           b: b
         };
       })()
     `);
-    console.log(`  - 单键 Q [第1次·全知识库]: 展开=${qState.knowledgeExpanded && qState.deepLeafExpanded}, 右翼保持语义二级=${qState.rightSemanticLevel2Kept}, 缩放=${(qState.scale * 100).toFixed(0)}%, 水平偏移=${Math.abs(qState.subtreeCenterX - qState.viewportCenterX).toFixed(1)}px, 顶部边距=${qState.subtreeTopOffset.toFixed(1)}px`);
+    console.log(`  - 单键 Q [第1次·全知识库]: 展开=${qState.knowledgeExpanded && qState.deepLeafExpanded}, 右翼保持语义二级=${qState.rightSemanticLevel2Kept}, 缩放=${(qState.scale * 100).toFixed(0)}%, 右侧边距=${qState.rightMargin.toFixed(1)}px, 顶部边距=${qState.subtreeTopOffset.toFixed(1)}px`);
     if (!qState.knowledgeExpanded || !qState.deepLeafExpanded || !qState.rightSemanticLevel2Kept || !qState.examFolded) {
       throw new Error('单键 Q 未能将知识点递归展开到底或未保持右翼语义二级');
     }
-    if (qState.scale < 0.80 || Math.abs(qState.subtreeCenterX - qState.viewportCenterX) > 90 || qState.subtreeTopOffset < 15 || qState.subtreeTopOffset > 95) {
-      throw new Error(`单键 Q 目标子树专属配框或顶部对齐异常: scale=${qState.scale}, centerDiff=${Math.abs(qState.subtreeCenterX - qState.viewportCenterX)}, topOffset=${qState.subtreeTopOffset}`);
+    if (qState.scale < 0.80 || qState.rightMargin < 20 || qState.rightMargin > 280 || qState.subtreeTopOffset < 15 || qState.subtreeTopOffset > 95) {
+      throw new Error(`单键 Q 目标子树专属配框或顶部对齐异常: scale=${qState.scale}, rightMargin=${qState.rightMargin}, topOffset=${qState.subtreeTopOffset}`);
     }
     await captureScreenshot(ws, 'chapter1_q_knowledge_focus.png');
 
@@ -1025,12 +1026,12 @@ async function runTests() {
           examFolded: !kp01Ref,
           leftSemanticLevel2Kept: Boolean(sec1Sub),
           scale: mm.view.scale,
-          centerDiffX: Math.abs((minX + maxX) / 2 - (cRect.left + cRect.width / 2))
+          leftMargin: minX - cRect.left
         };
       })()
     `);
-    console.log(`  - 单键 E (解法全量展开): 解法步骤展开=${eState.methodStepExpanded}, 左翼保持1.1~3.3=${eState.leftSemanticLevel2Kept}, 缩放=${(eState.scale * 100).toFixed(0)}%, 水平居中偏差=${eState.centerDiffX.toFixed(1)}px`);
-    if (!eState.methodExpanded || !eState.methodStepExpanded || !eState.examFolded || !eState.leftSemanticLevel2Kept || eState.scale < 0.80 || eState.centerDiffX > 90) {
+    console.log(`  - 单键 E (解法全量展开): 解法步骤展开=${eState.methodStepExpanded}, 左翼保持1.1~3.3=${eState.leftSemanticLevel2Kept}, 缩放=${(eState.scale * 100).toFixed(0)}%, 左侧边距=${eState.leftMargin.toFixed(1)}px`);
+    if (!eState.methodExpanded || !eState.methodStepExpanded || !eState.examFolded || !eState.leftSemanticLevel2Kept || eState.scale < 0.80 || eState.leftMargin < 20 || eState.leftMargin > 220) {
       throw new Error(`单键 E 解法全量展开或专属配框异常: ${JSON.stringify(eState)}`);
     }
     console.log('  PASS: 单键 Q / W / E 目标子树专属配框、顶部对齐、连按切分节与非目标分支语义二级保持完全符合预期');

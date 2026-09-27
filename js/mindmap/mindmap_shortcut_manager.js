@@ -658,7 +658,7 @@
             label: 'knowledge_all',
             targetRootUids: [branchUid],
             verticalAnchor: 'top',
-            horizontalAnchor: 'center',
+            horizontalAnchor: 'right',
             minReadableScale: 0.84,
             maxScale: 1.02
           });
@@ -710,7 +710,7 @@
             label: 'method_all',
             targetRootUids: [branchUid],
             verticalAnchor: 'top',
-            horizontalAnchor: 'center',
+            horizontalAnchor: 'left',
             minReadableScale: 0.84,
             maxScale: 1.02
           });
