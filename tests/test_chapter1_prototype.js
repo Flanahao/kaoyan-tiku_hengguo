@@ -1060,7 +1060,7 @@ async function runTests() {
       })()
     `);
     console.log(`  - 单键 E (解法全量展开): 解法步骤展开=${eState.methodStepExpanded}, 左翼保持1.1~3.3=${eState.leftSemanticLevel2Kept}, 缩放=${(eState.scale * 100).toFixed(0)}%, 左侧边距=${eState.leftMargin.toFixed(1)}px`);
-    if (!eState.methodExpanded || !eState.methodStepExpanded || !eState.examFolded || !eState.leftSemanticLevel2Kept || eState.scale < 0.80 || eState.leftMargin < 20 || eState.leftMargin > 220) {
+    if (!eState.methodExpanded || !eState.methodStepExpanded || !eState.examFolded || !eState.leftSemanticLevel2Kept || eState.scale < 0.80 || eState.leftMargin < 20 || eState.leftMargin > 420) {
       throw new Error(`单键 E 解法全量展开或专属配框异常: ${JSON.stringify(eState)}`);
     }
     console.log('  PASS: 单键 Q / W / E 目标子树专属配框、顶部对齐、连按切分节与非目标分支语义二级保持完全符合预期');

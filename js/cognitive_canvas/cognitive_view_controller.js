@@ -2109,19 +2109,30 @@
     // 允许鸟瞰全景按需缩至 0.05，不再被 0.25 限制导致全图溢出视口
     targetScale = Math.max(0.05, targetScale);
 
-    // 水平定位计算：根据目标子树生长方向与水平锚点做智能对齐
+    // 水平定位计算：根据目标子树生长方向与水平锚点做智能自适应居中排版
     var worldCenterX = (wb.minX + wb.maxX) / 2;
     var targetX;
+    var scaledSubtreeW = wb.width * targetScale;
     if (horizontalAnchor === 'right') {
-      // 向左生长的分支（知识分节）：锚定右侧节主干，保证节标题与核心层在视口右侧完整透出，杜绝标题被顶出视口右侧
-      var safeRightPad = Math.max(70, padX);
-      targetX = (vw - safeRightPad) - wb.maxX * targetScale;
+      if (scaledSubtreeW <= availW) {
+        // 子树宽度未充满视口：整体居中平衡，主节点自然处于中央偏右，两边对称留白
+        targetX = (vw / 2) - worldCenterX * targetScale;
+      } else {
+        // 子树超宽：保留 22%~25% 视口宽度的充裕呼吸区（不少于 260px），主节点不贴边缘
+        var breathPadRight = Math.max(260, vw * 0.24);
+        targetX = (vw - breathPadRight) - wb.maxX * targetScale;
+      }
     } else if (horizontalAnchor === 'left') {
-      // 向右生长的分支（解法招法）：锚定左侧招法主干，保证招法编号与题名在视口左侧完整透出，杜绝题名被顶出视口左侧
-      var safeLeftPad = Math.max(60, padX);
-      targetX = safeLeftPad - wb.minX * targetScale;
+      if (scaledSubtreeW <= availW) {
+        // 整体居中
+        targetX = (vw / 2) - worldCenterX * targetScale;
+      } else {
+        // 预留左侧呼吸区（不少于 240px）
+        var breathPadLeft = Math.max(240, vw * 0.22);
+        targetX = breathPadLeft - wb.minX * targetScale;
+      }
     } else {
-      // 居中对齐
+      // 标准几何居中
       targetX = (vw / 2) - worldCenterX * targetScale;
     }
 
