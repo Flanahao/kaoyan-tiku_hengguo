@@ -329,7 +329,7 @@
         },
         {
           data: {
-            text: '多元函数四角核心蕴含网（第 8 章多元微分对比，打破一元直觉）',
+            text: '多元函数四角核心蕴含网（第 5 章多元微分对比，打破一元直觉）',
             syncKey: 'sb_cd_nvar_net',
             tag: '定理',
             tagType: 'thm'
@@ -353,6 +353,14 @@
             },
             {
               data: {
+                text: '偏导数在邻域内存在且有界（$|f_x|\\le M, |f_y|\\le M$）$\\implies$ 函数必连续（Lipschitz 夹逼证明）',
+                syncKey: 'sb_cd_nvar_bound_cont',
+                tag: '定理',
+                tagType: 'thm'
+              }
+            },
+            {
+              data: {
                 text: '核心断裂 1：偏导数存在**推不出**连续（反例：$f(x,y)=\\frac{xy}{x^2+y^2}$，沿两坐标轴偏导数均为 0，但沿 $y=kx$ 趋于 0 时极限为 $\\frac{k}{1+k^2}$，极限不存在故不连续）',
                 syncKey: 'sb_cd_nvar_break1',
                 tag: '避坑',
@@ -364,6 +372,14 @@
                 text: '核心断裂 2：偏导数存在且函数连续**仍推不出**可微（反例：$f(x,y)=\\sqrt{x^2+y^2}$ 圆锥面，在原点连续且无方向全微分）',
                 syncKey: 'sb_cd_nvar_break2',
                 tag: '避坑',
+                tagType: 'warn'
+              }
+            },
+            {
+              data: {
+                text: '核心断裂 3：偏导数有界**仍推不出**可微（反例：$f(x,y)=\\frac{xy}{\\sqrt{x^2+y^2}}$，偏导绝对值 $\\le 1$ 有界且原点连续，但 $\\frac{\\Delta z - 0}{\\rho}=\\cos\\theta\\sin\\theta$ 不趋于 0，不可微）',
+                syncKey: 'sb_cd_nvar_break3',
+                tag: '反例',
                 tagType: 'warn'
               }
             }
@@ -484,6 +500,89 @@
                 syncKey: 'sb_lim_t4_formula',
                 tag: '公式',
                 tagType: 'formula'
+              }
+            }
+          ]
+        }
+      ]
+    },
+
+    // 5. 各类积分对称性与奇偶性通解矩阵（定积分 vs 重积分 vs 第一/第二类曲线曲面积分）
+    'sync_symmetry_integrals': {
+      syncBlockId: 'sync_symmetry_integrals',
+      title: '各类积分对称性与奇偶性通解矩阵（定积分 vs 重积分 vs 一二型线面积分）',
+      linkedChapters: ['math_ch1', 'math_ch4', 'math_ch7'],
+      rootData: {
+        text: '各类积分对称性与奇偶性通解矩阵（定积分 vs 重积分 vs 一二型线面积分）',
+        syncKey: 'sb_sym_root',
+        tag: '同步块',
+        tagType: 'sync'
+      },
+      children: [
+        {
+          data: {
+            text: '第一家族（无方向数量型：定积分、二重/三重积分、第一类曲线/曲面积分）——“奇零偶倍”',
+            syncKey: 'sb_sym_scalar_group',
+            tag: '定理',
+            tagType: 'thm'
+          },
+          children: [
+            {
+              data: {
+                text: '一元定积分 $[-a,a]$：$f(-x)=-f(x) \\implies \\int_{-a}^a f(x)dx = 0$；$f(-x)=f(x) \\implies 2\\int_0^a f(x)dx$',
+                syncKey: 'sb_sym_1d',
+                tag: '公式',
+                tagType: 'formula'
+              }
+            },
+            {
+              data: {
+                text: '二重/三重与第一类线面积分：积分域关于某坐标轴/坐标面对称（如关于 $yOz$ 面对称，即 $x\\leftrightarrow -x$ 不变），看被积函数关于 $x$ 的奇偶性：奇函数得 $0$，偶函数得 $2$ 倍半域积分',
+                syncKey: 'sb_sym_nd_scalar',
+                tag: '准则',
+                tagType: 'thm'
+              }
+            },
+            {
+              data: {
+                text: '轮换对称性（坐标地位对等）：若积分域关于 $y=x$（或 $x,y,z$ 轮换）对称，则 $\\iint_D f(x,y)d\\sigma = \\iint_D f(y,x)d\\sigma = \\frac{1}{2}\\iint_D [f(x,y)+f(y,x)]d\\sigma$',
+                syncKey: 'sb_sym_cyclic',
+                tag: '招法',
+                tagType: 'method'
+              }
+            }
+          ]
+        },
+        {
+          data: {
+            text: '第二家族（有方向坐标型：第二类曲线积分 $\\int_L Pdx$、第二类曲面积分 $\\iint_\\Sigma Rdxdy$）——“奇偶性与第一家族完全相反”',
+            syncKey: 'sb_sym_vector_group',
+            tag: '避坑',
+            tagType: 'warn'
+          },
+          children: [
+            {
+              data: {
+                text: '第二类曲面积分 $\\iint_\\Sigma R(x,y,z)dxdy$：若 $\\Sigma$ 关于 $xOy$ 面 ($z\\leftrightarrow -z$) 对称且同取外侧（上半上侧、下半下侧，法向 $z$ 分量反号）：当 $R$ 关于 $z$ 为**偶函数时积分为 $0$**，为**奇函数时积分为 $2\\iint_{\\Sigma_1} R dxdy$**',
+                syncKey: 'sb_sym_surf2_z',
+                tag: '警钟',
+                tagType: 'warn'
+              }
+            },
+            {
+              data: {
+                text: '同面关于非投影轴对称：若 $\\Sigma$ 关于 $yOz$ 面 ($x\\leftrightarrow -x$) 对称且取外侧（左右两侧法向 $z$ 分量同号）：此时 $\\iint_\\Sigma R(x,y,z)dxdy$ 恢复与数量积分一致（关于 $x$ 奇零偶倍）',
+                syncKey: 'sb_sym_surf2_x',
+                tag: '要领',
+                tagType: 'key'
+              }
+            },
+            {
+              data: {
+                text: '第二类平面曲线积分 $\\int_L P(x,y)dx$：若 $L$ 关于 $y$ 轴对称且方向一致（如顺时针从右到左，$dx$ 符号一致），则 $P$ 关于 $x$ 偶倍奇零；若 $L$ 关于 $x$ 轴上下对称且沿逆时针闭路（上下两段 $dx$ 方向相反），则 $P$ 关于 $y$ **偶零奇倍**',
+                syncKey: 'sb_sym_line2',
+                tag: '准则',
+                tagType: 'thm'
               }
             }
           ]
@@ -660,13 +759,18 @@
       return false;
     }
 
+    getAllBlocks() {
+      var exportObj = {};
+      this.registry.forEach(function (val, key) {
+        exportObj[key] = val;
+      });
+      return exportObj;
+    }
+
     persistRegistry() {
       try {
         if (typeof localStorage !== 'undefined') {
-          var exportObj = {};
-          this.registry.forEach(function (val, key) {
-            exportObj[key] = val;
-          });
+          var exportObj = this.getAllBlocks();
           localStorage.setItem('kaoyan.g.mindmap_sync_blocks', JSON.stringify(exportObj));
           if (typeof window !== 'undefined' && typeof window.notifyStorageSync === 'function') {
             window.notifyStorageSync();

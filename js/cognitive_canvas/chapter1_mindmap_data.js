@@ -526,12 +526,10 @@
                   },
                   {
                     data: {
-                      text: "海涅定理判断函数极限不存在的交错子列选取招法",
+                      text: "海涅定理判极限不存在的交错子列选取招法：取两列 $x_n^{(1)} = \\frac{1}{2n\\pi},\\ x_n^{(2)} = \\frac{1}{2n\\pi + \\pi/2} \\to 0$，证 $f(x_n^{(1)}) \\neq f(x_n^{(2)})$",
                       uid: "k_pending_heine_alt",
-                      tag: "待确认·研砖",
-                      tagType: "pending",
-                      formalTag: "招法",
-                      formalTagType: "method"
+                      tag: "招法",
+                      tagType: "method"
                     }
                   }
                 ]
@@ -621,12 +619,10 @@
                   },
                   {
                     data: {
-                      text: "广义化商代换口诀：$A-B = B\\left(\\frac{A}{B}-1\\right)$ 消除非零加减项",
+                      text: "广义化商代换口诀：$A-B = B\\left(\\frac{A}{B}-1\\right)$ 提公因式消除非零加减项，化为乘除因子代换",
                       uid: "k_pending_factor_out",
-                      tag: "待确认·30讲",
-                      tagType: "pending",
-                      formalTag: "法",
-                      formalTagType: "method"
+                      tag: "法",
+                      tagType: "method"
                     }
                   }
                 ]
@@ -777,9 +773,9 @@
                   },
                   {
                     data: {
-                      text: "第二类间断点（至少一侧极限不存在）：无穷间断点（至少一侧为 $\\infty$）与振荡间断点（如 $\\sin\\frac{1}{x}$）",
+                      text: "第二类间断点（无穷与振荡）：第一类与无穷间断点区间内绝无原函数；振荡间断点可能存在原函数（如 $F(x)=x^2\\sin\\frac{1}{x}$ 的导函数 $f(x)$ 在 $0$ 振荡无极限，但因 $F(x)$ 在 $0$ 连续，反常积分 $\\int_0^1 f(x)dx = F(1)-F(0)$ 必收敛）",
                       uid: "k_cont_disc_2",
-                      tag: "分类",
+                      tag: "分类与避坑",
                       tagType: "prop"
                     }
                   }
@@ -820,12 +816,10 @@
                   },
                   {
                     data: {
-                      text: "介值定理与平均值公式的离散点构造套路：$\\frac{1}{n}\\sum_{i=1}^n f(x_i) = f(\\xi)$",
+                      text: "介值定理加权平均值构造套路：若 $c_i>0$，则 $m \\le \\frac{\\sum c_i f(x_i)}{\\sum c_i} \\le M \\implies \\exists \\xi\\in[x_{\\min},x_{\\max}], f(\\xi) = \\frac{\\sum c_i f(x_i)}{\\sum c_i}$",
                       uid: "k_pending_ivt_mean",
-                      tag: "待确认·李范",
-                      tagType: "pending",
-                      formalTag: "法",
-                      formalTagType: "method"
+                      tag: "法",
+                      tagType: "method"
                     }
                   }
                 ]
@@ -1355,7 +1349,7 @@
           // M17 (挂载跨章同步块)
           {
             data: {
-              text: "M17 跨章求极限工具法（导数定义/变限积分/定积分/拉格朗日）",
+              text: "跨章求极限工具法（导数定义/变限积分/定积分/拉格朗日）",
               uid: "m_gs01_17",
               tag: "M17",
               tagType: "method",
@@ -1375,12 +1369,10 @@
               },
               {
                 data: {
-                  text: "拉格朗日中值同构在差式极限中的构造套路",
+                  text: "拉格朗日中值同构求差式极限：$f(\\alpha(x))-f(\\beta(x)) = f'(\\xi)[\\alpha(x)-\\beta(x)]$（$\\xi$ 夹在 $\\alpha,\\beta$ 之间）",
                   uid: "m_pending_lagrange_iso",
-                  tag: "待确认·30讲",
-                  tagType: "pending",
-                  formalTag: "招法",
-                  formalTagType: "method"
+                  tag: "招法",
+                  tagType: "method"
                 }
               }
             ]

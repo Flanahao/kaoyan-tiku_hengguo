@@ -215,6 +215,9 @@ async function runTests() {
     console.log('\n[Test 1] 校验 MindMap 独立工具集加载、无返回按钮设计与顶部控制栏移除...');
     const initCheck = await evaluate(ws, `
       (() => {
+        if (typeof window.switchChapter === 'function') {
+          window.switchChapter('math::基础30讲::高数::lec01');
+        }
         const hasToolkit = Boolean(
           window.MindMapNodeRenderer &&
           window.MindMapDragEnhancer &&
@@ -226,18 +229,27 @@ async function runTests() {
           window.MindMapShortcutManager &&
           window.DualViewController &&
           window.CognitiveViewController &&
+          window.Chapter0MindMapData &&
           window.Chapter1MindMapData &&
+          window.Chapter2MindMapData &&
+          window.Chapter3MindMapData &&
+          window.Chapter4MindMapData &&
+          window.Chapter5MindMapData &&
+          window.Chapter6MindMapData &&
+          window.Chapter7MindMapData &&
+          window.Chapter8MindMapData &&
+          window.Chapter9MindMapData &&
           window.MathVizWidget
         );
         const closeBtn = document.getElementById('btnCloseCognitiveModal') || document.querySelector('#cognitiveModal .cognitive-close-btn');
         const topToolbar = document.getElementById('cognitiveFloatingToolbar');
-        return { hasToolkit, hasBackBtn: Boolean(closeBtn), hasTopToolbar: Boolean(topToolbar) };
+        return { hasToolkit, hasBackBtn: Boolean(closeBtn), hasTopToolbar: Boolean(topToolbar), currentChapterId: window.currentChapterId };
       })()
     `);
     if (!initCheck.hasToolkit) throw new Error('MindMap 工具集或认知视图控制器未完全加载');
     if (initCheck.hasBackBtn) throw new Error('认知视图中不应存在返回按钮');
     if (initCheck.hasTopToolbar) throw new Error('顶部控制栏 (#cognitiveFloatingToolbar) 应已彻底移除');
-    console.log('  PASS: MindMap 独立工具集完整加载，严格遵循无返回按钮规范且顶部控制栏已物理移除');
+    console.log('  PASS: MindMap 独立工具集及高数 0~9 全章节导图完整加载，严格遵循无返回按钮规范且顶部控制栏已物理移除');
 
     // ─────────────────────────────────────────────────────────────
     // 测试用例 2：快捷键 O 呼出认知视图、双向语义聚拢排版与常态拓扑关联线网
@@ -852,9 +864,9 @@ async function runTests() {
     // ─────────────────────────────────────────────────────────────
     console.log('\n[Test 9] 校验单键 Q / W / E 目标子树专属配框、连按切分节与 ~/1/2/3 四阶渐进层级...');
 
-    // 1. 单键 Q (第1次): 知识点全量递归展开到底，目标子树专属配框 + 顶部对齐 + 可读字号保底；右翼保持语义二级
+    // 1. 单键 Q (第1次): 知识点全量递归展开到底，不要求可读最小缩放，侧重展示知识点全局并居中入屏；右翼保持语义二级
     await dispatchKey(ws, 'q', 'KeyQ', 81);
-    await sleep(600);
+    await sleep(450);
     const qState = await evaluate(ws, `
       (() => {
         const mm = window.CognitiveViewController.getInstance();
@@ -884,7 +896,7 @@ async function runTests() {
             if (r.right > maxX) maxX = r.right;
             if (r.bottom > maxY) maxY = r.bottom;
           });
-          return { minX, minY: minY - cRect.top, maxX, rightMargin: cRect.right - maxX, centerX: (minX + maxX) / 2, height: maxY - minY };
+          return { minX, minY: minY - cRect.top, maxX, maxY, rightMargin: cRect.right - maxX, centerX: (minX + maxX) / 2, height: maxY - minY };
         };
         const b = measureBranch('branch_knowledge');
         return {
@@ -903,12 +915,13 @@ async function runTests() {
         };
       })()
     `);
-    console.log(`  - 单键 Q [第1次·全知识库]: 展开=${qState.knowledgeExpanded && qState.deepLeafExpanded}, 右翼保持语义二级=${qState.rightSemanticLevel2Kept}, 缩放=${(qState.scale * 100).toFixed(0)}%, 右侧边距=${qState.rightMargin.toFixed(1)}px, 顶部边距=${qState.subtreeTopOffset.toFixed(1)}px`);
+    const qCenterDiffX = Math.abs(qState.subtreeCenterX - qState.viewportCenterX);
+    console.log(`  - 单键 Q [第1次·知识点全局]: 展开=${qState.knowledgeExpanded && qState.deepLeafExpanded}, 右翼保持语义二级=${qState.rightSemanticLevel2Kept}, 全局缩放=${(qState.scale * 100).toFixed(0)}%, 水平居中偏差=${qCenterDiffX.toFixed(1)}px, 边界=[${Math.round(qState.b.minX)}..${Math.round(qState.b.maxX)}, ${Math.round(qState.b.minY)}..${Math.round(qState.b.maxY)}]`);
     if (!qState.knowledgeExpanded || !qState.deepLeafExpanded || !qState.rightSemanticLevel2Kept || !qState.examFolded) {
       throw new Error('单键 Q 未能将知识点递归展开到底或未保持右翼语义二级');
     }
-    if (qState.scale < 0.80 || qState.rightMargin < 20 || qState.rightMargin > 280 || qState.subtreeTopOffset < 15 || qState.subtreeTopOffset > 95) {
-      throw new Error(`单键 Q 目标子树专属配框或顶部对齐异常: scale=${qState.scale}, rightMargin=${qState.rightMargin}, topOffset=${qState.subtreeTopOffset}`);
+    if (qCenterDiffX > 45 || qState.b.minX < 0 || qState.b.maxX > 1440 || qState.b.minY < 0 || qState.b.maxY > 900) {
+      throw new Error(`单键 Q [第1次] 未能完整居中展示知识点全局: scale=${qState.scale}, centerDiffX=${qCenterDiffX}, bounds=${JSON.stringify(qState.b)}`);
     }
     await captureScreenshot(ws, 'chapter1_q_knowledge_focus.png');
 
@@ -1342,16 +1355,285 @@ async function runTests() {
       throw new Error(`大纲模式 Shift+空格转正失败: ${JSON.stringify(outlineAfterConfirm)}`);
     }
 
+    // 在大纲模式下触发 Q 键分类展开，再切回思维导图模式，校验节点 UID 与关联线绝不被破坏
+    await dispatchKey(ws, 'q', 'KeyQ', 81);
+    await sleep(120);
+
     // 切回思维导图模式
     await dispatchKey(ws, 'm', 'KeyM', 77);
-    await sleep(400);
+    await sleep(350);
+
+    const afterOutlineSwitchCheck = await evaluate(ws, `
+      (() => {
+        const mm = window.CognitiveViewController.getInstance();
+        const tree = (mm.renderer && mm.renderer.renderTree) || mm.getData(false);
+        const childUids = (tree && Array.isArray(tree.children)) ? tree.children.map(c => c && c.data && c.data.uid) : [];
+        return {
+          rootUid: tree && tree.data ? tree.data.uid : '',
+          hasHybridUids: childUids.includes('branch_knowledge') && childUids.includes('branch_exam_points') && childUids.includes('branch_methods')
+        };
+      })()
+    `);
+    if (afterOutlineSwitchCheck.rootUid !== 'root_chapter_1' || !afterOutlineSwitchCheck.hasHybridUids) {
+      throw new Error(`大纲模式触发 Q 后切回导图导致 UID 损坏: ${JSON.stringify(afterOutlineSwitchCheck)}`);
+    }
 
     console.log('  PASS: 跨章节同步块注水、Shift+空格转正待确认标签、双层导图接口与静默自动持久化全量通过');
 
     // ─────────────────────────────────────────────────────────────
-    // 测试用例 7：顶层按 Esc / O 关闭认知视图，验证关闭后题库快捷键恢复正常
+    // 测试用例 11：原树拓扑剪枝聚拢 (1对N 关联节点聚拢 / 1对1 关联线聚拢 / 1层详情 / 连续漫游 / 数据安全)
     // ─────────────────────────────────────────────────────────────
-    console.log('\n[Test 7] 模拟顶层按下 Esc 关闭认知视图，并验证题库快捷键恢复...');
+    console.log('\n[Test 11] 校验原树拓扑剪枝聚拢 (1对N节点聚拢、1对1连线聚拢、1层详情、连续漫游与存储安全)...');
+
+    // 先回到标准 Level 2 核心全景
+    await dispatchKey(ws, '2', 'Digit2', 50);
+    await sleep(450);
+
+    // 11.1 左键点击 kp_gs01_01 的「关联 5」胶囊 -> 触发 1对N 原树拓扑剪枝聚拢
+    const cluster1toNCheck = await evaluate(ws, `
+      new Promise(resolve => {
+        const pill = document.querySelector('#cognitiveMindMapContainer [data-node-uid="kp_gs01_01"] .mm-node-resonance-pill');
+        if (!pill) return resolve({ ok: false, error: '未找到 kp_gs01_01 的关联胶囊' });
+        pill.click();
+        setTimeout(() => {
+          const ctrl = window.CognitiveViewController;
+          const mm = ctrl.getInstance();
+          const st = ctrl.getClusterState();
+          const has = (uid) => Boolean(document.querySelector('#cognitiveMindMapContainer [data-node-uid="' + uid + '"]'));
+          const rectOf = (uid) => {
+            const el = document.querySelector('#cognitiveMindMapContainer [data-node-uid="' + uid + '"]');
+            return el ? el.getBoundingClientRect() : null;
+          };
+          const rRoot = rectOf('root_chapter_1');
+          const rKp01 = rectOf('kp_gs01_01');
+          const rEquiv = rectOf('k_equiv_table');
+          const rM03 = rectOf('m_gs01_03');
+          const hybridOrientationKept = Boolean(
+            rRoot && rKp01 && rEquiv && rM03 &&
+            rKp01.bottom < rRoot.top &&
+            rEquiv.right < rRoot.left &&
+            rM03.left > rRoot.right
+          );
+          const allCards = Array.from(document.querySelectorAll('#cognitiveMindMapContainer .smm-node-container .mm-node-card'));
+          const allFullOpacity = allCards.length > 0 && allCards.every(c => window.getComputedStyle(c).opacity === '1');
+          const activeLines = document.querySelectorAll('#cognitiveMindMapContainer .smm-associative-line-container path.smm-associative-line-path.is-active-line');
+
+          resolve({
+            ok: true,
+            isActive: ctrl.isClusterActive(),
+            mode: st.mode,
+            centerUid: st.centerUid,
+            scale: mm.view.scale,
+            totalCards: allCards.length,
+            allFullOpacity,
+            activeLineCount: activeLines.length,
+            hybridOrientationKept,
+            // 涉及的核心节点必须保留
+            keptInvolved: has('kp_gs01_01') && has('m_gs01_03') && has('m_gs01_04') && has('m_gs01_05') && has('k_equiv_table') && has('k_taylor_table'),
+            // 涉及节点的 1 层详情子节点必须自动展开
+            kept1LayerDetails: has('kp_gs01_01_ref') && has('kp_gs01_01_path') && has('m_gs01_03_s1') && has('k_equiv_core_f1') && has('k_taylor_1'),
+            // 无关兄弟分支与节点必须被剪枝隐藏
+            prunedUnrelated: !has('kp_gs01_02') && !has('kp_gs01_03') && !has('kp_gs01_04') && !has('kp_gs01_05') && !has('m_gs01_01') && !has('m_gs01_02') && !has('sec_1_func') && !has('sec_3_cont')
+          });
+        }, 420);
+      })
+    `);
+    console.log(`  - 1对N 胶囊点击聚拢 (kp_gs01_01): 激活=${cluster1toNCheck.isActive}, 模式=${cluster1toNCheck.mode}, 节点数=${cluster1toNCheck.totalCards}, 缩放=${(cluster1toNCheck.scale * 100).toFixed(0)}%, 关联线=${cluster1toNCheck.activeLineCount}条, 品字方位保持=${cluster1toNCheck.hybridOrientationKept}, 1层详情展开=${cluster1toNCheck.kept1LayerDetails}, 无关分支剪除=${cluster1toNCheck.prunedUnrelated}`);
+    if (!cluster1toNCheck.ok || !cluster1toNCheck.isActive || cluster1toNCheck.mode !== 'node' || cluster1toNCheck.centerUid !== 'kp_gs01_01' || !cluster1toNCheck.keptInvolved || !cluster1toNCheck.kept1LayerDetails || !cluster1toNCheck.prunedUnrelated || !cluster1toNCheck.hybridOrientationKept || !cluster1toNCheck.allFullOpacity || cluster1toNCheck.activeLineCount !== 5 || cluster1toNCheck.scale < 0.45) {
+      throw new Error(`1对N 关联节点拓扑剪枝聚拢校验失败: ${JSON.stringify(cluster1toNCheck)}`);
+    }
+    await captureScreenshot(ws, 'chapter1_cluster_1toN_kp01.png');
+
+    // 11.2 聚拢态下连续漫游：右键点击聚拢图中的 k_taylor_table -> 无缝切换以 k_taylor_table 为中心聚拢
+    const roamToTaylorCheck = await evaluate(ws, `
+      new Promise(resolve => {
+        const taylorCard = document.querySelector('#cognitiveMindMapContainer [data-node-uid="k_taylor_table"]');
+        if (!taylorCard) return resolve({ ok: false, error: '未找到 k_taylor_table 节点卡片' });
+        const r = taylorCard.getBoundingClientRect();
+        taylorCard.dispatchEvent(new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          button: 2,
+          clientX: r.left + r.width / 2,
+          clientY: r.top + r.height / 2
+        }));
+        setTimeout(() => {
+          const ctrl = window.CognitiveViewController;
+          const st = ctrl.getClusterState();
+          const has = (uid) => Boolean(document.querySelector('#cognitiveMindMapContainer [data-node-uid="' + uid + '"]'));
+          const activeLines = document.querySelectorAll('#cognitiveMindMapContainer .smm-associative-line-container path.smm-associative-line-path.is-active-line');
+          resolve({
+            ok: true,
+            isActive: ctrl.isClusterActive(),
+            mode: st.mode,
+            centerUid: st.centerUid,
+            activeLineCount: activeLines.length,
+            hasTaylorNeighbors: has('k_taylor_table') && has('kp_gs01_01') && has('kp_gs01_02') && has('m_gs01_04') && has('m_gs01_16'),
+            prunedPrevOnlyNeighbors: !has('k_equiv_table') && !has('m_gs01_03') && !has('m_gs01_05')
+          });
+        }, 420);
+      })
+    `);
+    console.log(`  - 聚拢态右键漫游切换 (k_taylor_table): 中心=${roamToTaylorCheck.centerUid}, 关联线=${roamToTaylorCheck.activeLineCount}条, 新邻居聚拢=${roamToTaylorCheck.hasTaylorNeighbors}, 旧无关邻居剪除=${roamToTaylorCheck.prunedPrevOnlyNeighbors}`);
+    if (!roamToTaylorCheck.ok || !roamToTaylorCheck.isActive || roamToTaylorCheck.centerUid !== 'k_taylor_table' || !roamToTaylorCheck.hasTaylorNeighbors || !roamToTaylorCheck.prunedPrevOnlyNeighbors || roamToTaylorCheck.activeLineCount !== 4) {
+      throw new Error(`聚拢态右键连续漫游切换校验失败: ${JSON.stringify(roamToTaylorCheck)}`);
+    }
+    await captureScreenshot(ws, 'chapter1_cluster_roam_taylor.png');
+
+    // 11.3 在聚拢态下左键点击某条关联线 (kp_gs01_02 <-> k_taylor_table) -> 切换为 1对1 连线精准对照聚拢
+    const edgeClusterCheck = await evaluate(ws, `
+      new Promise(resolve => {
+        const clickPaths = Array.from(document.querySelectorAll('#cognitiveMindMapContainer .smm-associative-line-container path.smm-associative-line-click-path'));
+        const targetEdge = clickPaths.find(p => {
+          const u = p.getAttribute('data-from-uid');
+          const v = p.getAttribute('data-to-uid');
+          return (u === 'kp_gs01_02' && v === 'k_taylor_table') || (u === 'k_taylor_table' && v === 'kp_gs01_02');
+        });
+        if (!targetEdge) return resolve({ ok: false, error: '未找到 kp_gs01_02 <-> k_taylor_table 关联线点击热区' });
+        targetEdge.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        setTimeout(() => {
+          const ctrl = window.CognitiveViewController;
+          const mm = ctrl.getInstance();
+          const st = ctrl.getClusterState();
+          const has = (uid) => Boolean(document.querySelector('#cognitiveMindMapContainer [data-node-uid="' + uid + '"]'));
+          const activeLines = document.querySelectorAll('#cognitiveMindMapContainer .smm-associative-line-container path.smm-associative-line-path.is-active-line');
+          const totalLines = document.querySelectorAll('#cognitiveMindMapContainer .smm-associative-line-container path.smm-associative-line-path');
+          resolve({
+            ok: true,
+            isActive: ctrl.isClusterActive(),
+            mode: st.mode,
+            scale: mm.view.scale,
+            activeLineCount: activeLines.length,
+            totalLineCount: totalLines.length,
+            keptEndpointsAndDetails: has('kp_gs01_02') && has('kp_gs01_02_ref') && has('k_taylor_table') && has('k_taylor_1'),
+            prunedOtherNodesAndSector: !has('kp_gs01_01') && !has('branch_methods') && !has('m_gs01_04') && !has('m_gs01_16')
+          });
+        }, 420);
+      })
+    `);
+    console.log(`  - 1对1 关联线点击聚拢 (kp_gs01_02 <-> k_taylor_table): 模式=${edgeClusterCheck.mode}, 缩放=${(edgeClusterCheck.scale * 100).toFixed(0)}%, 唯一激活连线=${edgeClusterCheck.activeLineCount}/${edgeClusterCheck.totalLineCount}, 端点及1层详情保留=${edgeClusterCheck.keptEndpointsAndDetails}, 无关扇区剪除=${edgeClusterCheck.prunedOtherNodesAndSector}`);
+    if (!edgeClusterCheck.ok || !edgeClusterCheck.isActive || edgeClusterCheck.mode !== 'edge' || edgeClusterCheck.activeLineCount !== 1 || edgeClusterCheck.totalLineCount !== 1 || !edgeClusterCheck.keptEndpointsAndDetails || !edgeClusterCheck.prunedOtherNodesAndSector || edgeClusterCheck.scale < 0.65) {
+      throw new Error(`1对1 关联线拓扑剪枝聚拢校验失败: ${JSON.stringify(edgeClusterCheck)}`);
+    }
+    await captureScreenshot(ws, 'chapter1_cluster_1to1_edge.png');
+
+    // 11.4 再次点击同一条激活关联线 -> 退出聚拢态，还原完整章节树
+    const exitBySameEdgeCheck = await evaluate(ws, `
+      new Promise(resolve => {
+        const targetEdge = document.querySelector('#cognitiveMindMapContainer .smm-associative-line-container path.smm-associative-line-click-path');
+        if (!targetEdge) return resolve({ ok: false, error: '未找到激活关联线' });
+        targetEdge.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        setTimeout(() => {
+          const ctrl = window.CognitiveViewController;
+          const cards = document.querySelectorAll('#cognitiveMindMapContainer .smm-node-container .mm-node-card');
+          const lines = document.querySelectorAll('#cognitiveMindMapContainer .smm-associative-line-container path.smm-associative-line-path');
+          resolve({
+            ok: true,
+            isActive: ctrl.isClusterActive(),
+            cardCount: cards.length,
+            lineCount: lines.length
+          });
+        }, 420);
+      })
+    `);
+    console.log(`  - 再次点击同一关联线退出聚拢: 聚拢激活=${exitBySameEdgeCheck.isActive}, 恢复全景节点=${exitBySameEdgeCheck.cardCount}个, 恢复关联线=${exitBySameEdgeCheck.lineCount}条`);
+    if (!exitBySameEdgeCheck.ok || exitBySameEdgeCheck.isActive || exitBySameEdgeCheck.cardCount !== 42 || exitBySameEdgeCheck.lineCount !== 19) {
+      throw new Error(`再次点击同一关联线未能完整退出聚拢态: ${JSON.stringify(exitBySameEdgeCheck)}`);
+    }
+
+    // 11.5 校验 1 层详情边界（不展开第 2 层孙节点）+ 聚拢态下修改节点同步回完整树且绝不将剪枝残树写入 localStorage
+    const deepBoundaryAndSafetyCheck = await evaluate(ws, `
+      new Promise(resolve => {
+        const ctrl = window.CognitiveViewController;
+        ctrl.enterNodeCluster('kp_gs01_03');
+        setTimeout(() => {
+          const mm = ctrl.getInstance();
+          const has = (uid) => Boolean(document.querySelector('#cognitiveMindMapContainer [data-node-uid="' + uid + '"]'));
+          // k_fn_properties 是 kp_gs01_03 的关联节点，其直接子节点 k_fn_prop_sync_parity (1层详情) 必须展开可见，而孙节点 k_fn_prop_sync_parity__sb_pp_parity_group (2层详情) 必须折叠隐藏
+          const has1LayerChild = has('k_fn_prop_sync_parity');
+          const has2LayerGrandchild = has('k_fn_prop_sync_parity__sb_pp_parity_group');
+
+          // 在聚拢剪枝态下修改 kp_gs01_03 的高亮色并触发立即落盘
+          const kp03Node = mm.renderer.findNodeByUid('kp_gs01_03');
+          const sm = ctrl.getShortcutManager();
+          if (kp03Node && sm) {
+            sm.toggleNodeHighlight(kp03Node, 'yellow');
+          }
+          ctrl.persistCurrentMindMapState(true);
+
+          const savedRaw = localStorage.getItem('kaoyan.g.mindmap_chapters.math_ch1');
+          const savedTree = savedRaw ? JSON.parse(savedRaw) : null;
+          const isSavedPruned = Boolean(savedTree && savedTree.data && savedTree.data._isClusterPruned);
+          let savedKpCount = 0;
+          let savedMethodCount = 0;
+          let savedKp03Color = '';
+          const walk = (n) => {
+            if (!n) return;
+            const u = (n.data && n.data.uid) || '';
+            if (/^kp_gs01_0[1-5]$/.test(u)) savedKpCount++;
+            if (/^m_gs01_\\d+$/.test(u)) savedMethodCount++;
+            if (u === 'kp_gs01_03') savedKp03Color = (n.data && n.data.highlightColor) || '';
+            (n.children || []).forEach(walk);
+          };
+          walk(savedTree);
+
+          // 点击画布空白处 (draw_click) 退出聚拢态，验证完整树恢复且修改保留
+          mm.emit('draw_click');
+          setTimeout(() => {
+            const kp03Restored = mm.renderer.findNodeByUid('kp_gs01_03');
+            const restoredColor = kp03Restored ? kp03Restored.getData('highlightColor') : '';
+            // 清理测试高亮色
+            if (kp03Restored && sm) {
+              sm.toggleNodeHighlight(kp03Restored, 'none');
+            }
+            ctrl.persistCurrentMindMapState(true);
+
+            resolve({
+              has1LayerChild,
+              has2LayerGrandchild,
+              isSavedPruned,
+              savedKpCount,
+              savedMethodCount,
+              savedKp03Color,
+              afterDrawClickActive: ctrl.isClusterActive(),
+              restoredColor
+            });
+          }, 380);
+        }, 420);
+      })
+    `);
+    console.log(`  - 1层详情边界与存储安全: 1层子项展开=${deepBoundaryAndSafetyCheck.has1LayerChild}, 2层孙项折叠=${!deepBoundaryAndSafetyCheck.has2LayerGrandchild}, 落盘非剪枝残树=${!deepBoundaryAndSafetyCheck.isSavedPruned}(考点=${deepBoundaryAndSafetyCheck.savedKpCount}/5, 招法=${deepBoundaryAndSafetyCheck.savedMethodCount}), 聚拢内编辑同步=${deepBoundaryAndSafetyCheck.savedKp03Color === 'yellow' && deepBoundaryAndSafetyCheck.restoredColor === 'yellow'}, 空白点击退出=${!deepBoundaryAndSafetyCheck.afterDrawClickActive}`);
+    if (!deepBoundaryAndSafetyCheck.has1LayerChild || deepBoundaryAndSafetyCheck.has2LayerGrandchild || deepBoundaryAndSafetyCheck.isSavedPruned || deepBoundaryAndSafetyCheck.savedKpCount !== 5 || deepBoundaryAndSafetyCheck.savedMethodCount < 16 || deepBoundaryAndSafetyCheck.savedKp03Color !== 'yellow' || deepBoundaryAndSafetyCheck.restoredColor !== 'yellow' || deepBoundaryAndSafetyCheck.afterDrawClickActive) {
+      throw new Error(`1层详情边界或聚拢态存储安全校验失败: ${JSON.stringify(deepBoundaryAndSafetyCheck)}`);
+    }
+
+    // 11.6 校验 Esc 与 1/2/3 快捷键退出聚拢态（不误关认知视图）以及右键无关联线节点不误触
+    await evaluate(ws, `window.CognitiveViewController.enterNodeCluster('kp_gs01_01')`);
+    await sleep(380);
+    await dispatchKey(ws, 'Escape', 'Escape', 27);
+    await sleep(380);
+    const afterEscClusterCheck = await evaluate(ws, `
+      (() => {
+        const ctrl = window.CognitiveViewController;
+        const sec1Card = document.querySelector('#cognitiveMindMapContainer [data-node-uid="sec_1_func"]');
+        if (sec1Card) {
+          sec1Card.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 }));
+        }
+        return {
+          isModalOpen: ctrl.isOpen(),
+          isClusterActiveAfterEsc: ctrl.isClusterActive()
+        };
+      })()
+    `);
+    if (!afterEscClusterCheck.isModalOpen || afterEscClusterCheck.isClusterActiveAfterEsc) {
+      throw new Error(`按 Esc 退出聚拢态或无关联节点右键防误触异常: ${JSON.stringify(afterEscClusterCheck)}`);
+    }
+    console.log('  PASS: 原树拓扑剪枝聚拢 (1对N / 1对1 / 1层详情 / 连续漫游 / 多路径退出 / 存储安全) 全量验证通过');
+
+    // ─────────────────────────────────────────────────────────────
+    // 测试用例 7：顶层按 Esc / O 关闭认知视图，验证从题库页面再次按 O 居中定位与题库快捷键恢复正常
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[Test 7] 模拟顶层按下 Esc 关闭认知视图，并验证从题库再次按 O 居中定位及题库快捷键恢复...');
     await dispatchKey(ws, 'Escape', 'Escape', 27);
     await sleep(400);
 
@@ -1362,6 +1644,54 @@ async function runTests() {
       })()
     `);
     if (!closedCheck) throw new Error('顶层按 Esc 未能关闭认知视图');
+
+    // 在题库页面按 O 再次进入认知视图（模拟题库章节 ID 与本地缓存存在），校验恢复二级全景且视角居中而非卡在左上角
+    await dispatchKey(ws, 'o', 'KeyO', 79);
+    await sleep(250);
+    const reopenFromBankCheck = await evaluate(ws, `
+      new Promise(resolve => {
+        const mm = window.CognitiveViewController.getInstance();
+        const container = document.getElementById('cognitiveMindMapContainer');
+        const cRect = container.getBoundingClientRect();
+        const cards = Array.from(document.querySelectorAll('#cognitiveMindMapContainer .smm-node-container .mm-node-card'));
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        cards.forEach(c => {
+          const r = c.getBoundingClientRect();
+          if (r.width > 0 && r.left > -1000) {
+            if (r.left < minX) minX = r.left;
+            if (r.right > maxX) maxX = r.right;
+            if (r.top < minY) minY = r.top;
+            if (r.bottom > maxY) maxY = r.bottom;
+          }
+        });
+        const isOpen = window.CognitiveViewController.isOpen();
+        const scale = mm.view.scale;
+        const visibleCount = cards.length;
+        const centerDiffX = Math.abs((minX + maxX) / 2 - (cRect.left + cRect.width / 2));
+
+        const t0 = performance.now();
+        const onEnd = () => {
+          mm.off('node_tree_render_end', onEnd);
+          resolve({
+            isOpen,
+            scale,
+            visibleCount,
+            centerDiffX,
+            minX, maxX, minY, maxY,
+            level3EndToEndMs: performance.now() - t0
+          });
+        };
+        mm.on('node_tree_render_end', onEnd);
+        window.CognitiveViewController.expandToLevel(3);
+      })
+    `);
+    console.log(`  - 从题库页面按 O 重开校验: 可见节点=${reopenFromBankCheck.visibleCount}个, 缩放=${(reopenFromBankCheck.scale * 100).toFixed(0)}%, 水平居中偏差=${reopenFromBankCheck.centerDiffX.toFixed(1)}px, 3键端到端重排耗时=${reopenFromBankCheck.level3EndToEndMs.toFixed(1)}ms`);
+    if (!reopenFromBankCheck.isOpen || reopenFromBankCheck.visibleCount !== 52 || reopenFromBankCheck.scale < 0.50 || reopenFromBankCheck.centerDiffX > 45 || reopenFromBankCheck.minX < 0 || reopenFromBankCheck.maxX > 1440) {
+      throw new Error(`从题库页面按 O 进入认知视图视角或层级异常: ${JSON.stringify(reopenFromBankCheck)}`);
+    }
+
+    await dispatchKey(ws, 'Escape', 'Escape', 27);
+    await sleep(350);
 
     // 关闭后在题库按 'd' 切下一题，同时按 'm' 不应触发认知大纲切换
     await dispatchKey(ws, 'd', 'KeyD', 68);
@@ -1376,6 +1706,151 @@ async function runTests() {
       throw new Error('关闭认知视图后，底层题库 D 键切题未恢复工作');
     }
     console.log(`  PASS: 关闭认知视图后，底层题库快捷键正常切题 (${beforeKeyState.currentQ} -> ${hostNavCheck.currentQ})，导图组件保持静默休眠`);
+
+    // ─────────────────────────────────────────────────────────────
+    // 测试用例 12：高数全 10 章 (第0章~第9章) 导图挂载、跨书路由映射与 5 大同步块验证
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[Test 12] 校验高数全 10 章 (math_ch0 ~ math_ch9) 导图挂载、跨书路由映射与 5 大同步块...');
+    const allChaptersCheck = await evaluate(ws, `
+      (async () => {
+        const ctrl = window.CognitiveViewController;
+        const reg = ctrl.getChapterRegistry();
+        const expectedChapters = [
+          'math_ch0', 'math_ch1', 'math_ch2', 'math_ch3', 'math_ch4',
+          'math_ch5', 'math_ch6', 'math_ch7', 'math_ch8', 'math_ch9'
+        ];
+        const missingChapters = expectedChapters.filter(id => !reg.has(id));
+
+        // 1. 跨习题册章节路由校验
+        const routeCases = [
+          ['math::基础30讲::高数::lec00', 'math_ch0'],
+          ['math::基础30讲::高数::lec01', 'math_ch1'],
+          ['math::基础30讲::高数::lec02', 'math_ch1'],
+          ['math::基础30讲::高数::lec03', 'math_ch2'],
+          ['math::基础30讲::高数::lec06', 'math_ch3'],
+          ['math::基础30讲::高数::lec08', 'math_ch4'],
+          ['math::基础30讲::高数::lec13', 'math_ch5'],
+          ['math::基础30讲::高数::lec17', 'math_ch6'],
+          ['math::基础30讲::高数::lec14', 'math_ch7'],
+          ['math::基础30讲::高数::lec18', 'math_ch7'],
+          ['math::基础30讲::高数::lec16', 'math_ch8'],
+          ['math::基础30讲::高数::lec15', 'math_ch9'],
+          ['math::李范全书::高数::ch01', 'math_ch1'],
+          ['math::李范全书::高数::ch04', 'math_ch3'],
+          ['math::李范全书::高数::ch06', 'math_ch9'],
+          ['math::李范全书::高数::ch07', 'math_ch6'],
+          ['math::李范全书::高数::ch08', 'math_ch5'],
+          ['math::李范全书::高数::ch09', 'math_ch7'],
+          ['math::李范全书::高数::ch11', 'math_ch8'],
+          ['math::老姚高数::高数::ch06', 'math_ch4'],
+          ['math::老姚高数::高数::ch07', 'math_ch9'],
+          ['math::老姚高数::高数::ch08', 'math_ch6'],
+          ['math::老姚高数::高数::ch09', 'math_ch5'],
+          ['math::老姚高数::高数::ch10', 'math_ch7'],
+          ['math::老姚高数::高数::ch12', 'math_ch8']
+        ];
+        const routeErrors = [];
+        for (const [rawId, expected] of routeCases) {
+          const actual = ctrl.resolveChapterId(rawId, false);
+          if (actual !== expected) {
+            routeErrors.push(rawId + ' -> ' + actual + ' (expected ' + expected + ')');
+          }
+        }
+
+        // 2. 校验 5 大跨章同步块注册完备
+        const syncBlocks = window.SyncBlockManager && typeof window.SyncBlockManager.getAllBlocks === 'function'
+          ? window.SyncBlockManager.getAllBlocks()
+          : (window.SyncBlocksData || {});
+        const expectedSyncIds = [
+          'sync_parity_period',
+          'sync_boundedness',
+          'sync_cont_diff_1vN',
+          'sync_limit_cross_tools',
+          'sync_symmetry_integrals'
+        ];
+        const missingSyncIds = expectedSyncIds.filter(id => !syncBlocks[id]);
+
+        // 3. 校验 L1 宏观学科树包含全部 10 章
+        const macroTree = ctrl.buildSubjectMacroTree('math', 3);
+        const macroChapterCount = (macroTree && Array.isArray(macroTree.children)) ? macroTree.children.length : 0;
+
+        // 4. 校验全部 10 章树结构、同步块注水与零 Emoji / 禁词，并验证动态切换章节渲染
+        const chapterSummaries = [];
+        const emojiRe = /[\\u{1F300}-\\u{1FAFF}\\u{2600}-\\u{27BF}]/u;
+        const forbiddenRe = /feishu|飞书/i;
+        let contentViolation = null;
+
+        for (let i = 0; i < expectedChapters.length; i++) {
+          const chId = expectedChapters[i];
+          const rawTree = reg.get(chId);
+          const hydratedTree = window.SyncBlockManager.hydrateTree(rawTree);
+          const childrenUids = (hydratedTree && Array.isArray(hydratedTree.children)) ? hydratedTree.children.map(c => c.data && c.data.uid) : [];
+          const hasAllThreeBranches = childrenUids.includes('branch_knowledge') &&
+            childrenUids.includes('branch_exam_points') &&
+            childrenUids.includes('branch_methods');
+
+          let nodeCount = 0;
+          let syncRootCount = 0;
+          const walk = (n) => {
+            if (!n) return;
+            nodeCount++;
+            const txt = (n.data && n.data.text) || '';
+            if (n.data && n.data.syncBlockId && !n.data.isSyncBlockChild) syncRootCount++;
+            if (emojiRe.test(txt) || forbiddenRe.test(txt)) {
+              contentViolation = chId + ' 节点 [' + (n.data && n.data.uid) + '] 含违禁字符: ' + txt;
+            }
+            (n.children || []).forEach(walk);
+          };
+          walk(hydratedTree);
+          chapterSummaries.push({
+            chId,
+            rootUid: hydratedTree && hydratedTree.data && hydratedTree.data.uid,
+            hasAllThreeBranches,
+            nodeCount,
+            syncRootCount
+          });
+        }
+
+        // 5. 验证运行时切换到第0章与第7章并渲染
+        ctrl.open({ subject: 'math', chapterId: 'math_ch0' });
+        await new Promise(r => setTimeout(r, 150));
+        const ch0CurrentId = ctrl.getCurrentChapterId();
+        const ch0RootDom = Boolean(document.querySelector('#cognitiveMindMapContainer [data-node-uid="root_chapter_0"]'));
+
+        ctrl.loadChapter('math_ch7');
+        await new Promise(r => setTimeout(r, 150));
+        const ch7CurrentId = ctrl.getCurrentChapterId();
+        const ch7RootDom = Boolean(document.querySelector('#cognitiveMindMapContainer [data-node-uid="root_chapter_7"]'));
+        ctrl.close();
+
+        return {
+          missingChapters,
+          routeErrors,
+          missingSyncIds,
+          macroChapterCount,
+          chapterSummaries,
+          contentViolation,
+          ch0SwitchOk: ch0CurrentId === 'math_ch0' && ch0RootDom,
+          ch7SwitchOk: ch7CurrentId === 'math_ch7' && ch7RootDom
+        };
+      })()
+    `);
+    console.log(`  - 已注册高数章节数: ${10 - allChaptersCheck.missingChapters.length}/10, L1宏观树章节数: ${allChaptersCheck.macroChapterCount}, 同步块数: ${5 - allChaptersCheck.missingSyncIds.length}/5`);
+    console.log(`  - 各章节点与同步块统计: ${allChaptersCheck.chapterSummaries.map(s => `${s.chId}(${s.nodeCount}节点,同步块=${s.syncRootCount})`).join(', ')}`);
+    console.log(`  - 动态跨章渲染校验: math_ch0=${allChaptersCheck.ch0SwitchOk}, math_ch7=${allChaptersCheck.ch7SwitchOk}`);
+    if (
+      allChaptersCheck.missingChapters.length > 0 ||
+      allChaptersCheck.routeErrors.length > 0 ||
+      allChaptersCheck.missingSyncIds.length > 0 ||
+      allChaptersCheck.macroChapterCount !== 10 ||
+      allChaptersCheck.contentViolation ||
+      !allChaptersCheck.ch0SwitchOk ||
+      !allChaptersCheck.ch7SwitchOk ||
+      allChaptersCheck.chapterSummaries.some(s => !s.hasAllThreeBranches || s.nodeCount < 20)
+    ) {
+      throw new Error(`全 10 章导图或路由校验失败: ${JSON.stringify(allChaptersCheck)}`);
+    }
+    console.log('  PASS: 高数全 10 章 (第0章~第9章) 导图结构、跨习题册路由映射、5大同步块注水与文案洁癖校验 100% 通过');
 
     console.log('\n================================================================');
     console.log('  第一章认知视图与 MindMap 独立工具集全量 CDP E2E 测试通过 (PASS)');
