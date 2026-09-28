@@ -62,12 +62,15 @@
           <!-- 节点与层级操作 -->
           <div class="shortcut-section">
             <div class="shortcut-section-title">层级与分类展开</div>
-            <div class="shortcut-item"><span>聚焦知识点 (连按巡航分节)</span><kbd>Q</kbd></div>
-            <div class="shortcut-item"><span>聚焦核心考点 (连按巡航分组)</span><kbd>W</kbd></div>
-            <div class="shortcut-item"><span>聚焦解题方法 (连按巡航招法)</span><kbd>E</kbd></div>
+            <div class="shortcut-item"><span>全量层 / 章节层切换</span><kbd>S</kbd></div>
+            <div class="shortcut-item"><span>上一章 / 下一章</span><kbd>A / D</kbd></div>
+            <div class="shortcut-item"><span>聚焦知识点 (连按巡航分节/章)</span><kbd>Q</kbd></div>
+            <div class="shortcut-item"><span>聚焦核心考点 (连按巡航分组/章)</span><kbd>W</kbd></div>
+            <div class="shortcut-item"><span>聚焦解题方法 (连按巡航招法/章)</span><kbd>E</kbd></div>
             <div class="shortcut-item"><span>分节骨架 (左至§1~§3)</span><kbd>1</kbd></div>
             <div class="shortcut-item"><span>核心全景 (同级对齐总览)</span><kbd>2</kbd></div>
             <div class="shortcut-item"><span>全图鸟瞰 (展开全部节点)</span><kbd>3</kbd></div>
+            <div class="shortcut-item"><span>待确认标签一键转正</span><kbd>Shift + 空格</kbd></div>
             <div class="shortcut-item"><span>展开/折叠当前节点</span><kbd>Alt + .</kbd></div>
             <div class="shortcut-item"><span>复制 / 创建副本</span><kbd>Ctrl + C / Ctrl + D</kbd></div>
           </div>

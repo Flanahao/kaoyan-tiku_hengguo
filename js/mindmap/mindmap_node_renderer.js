@@ -51,29 +51,141 @@
     return 'mm-tag-default';
   }
 
+  var htmlCache = new Map();
+  var sizeCache = new Map();
+  var batchMeasureHost = null;
+
+  function computeSizeCacheKey(rawData, layerIndex) {
+    if (!rawData) return '';
+    const role = rawData.role || '';
+    const text = normalizeInlineHighlights(stripOuterParagraph(rawData.text || ''));
+    const tagText = rawData.tag || rawData.code || (rawData.importance ? `${rawData.importance}★ ${rawData.trend || '考点'}` : '');
+    const rawResonanceTargets = rawData.associativeLineTargets || rawData.resonanceLinks;
+    const resLen = Array.isArray(rawResonanceTargets)
+      ? new Set(rawResonanceTargets.filter(uid => uid && uid !== rawData.uid)).size
+      : 0;
+    const catFlag = rawData.isCatalogLeaf ? 'cat' : '';
+    return `${layerIndex}|${role}|${catFlag}|${tagText}|${text}|${rawData.questionCount || 0}|${rawData.hasWidget ? rawData.widgetType : ''}|${resLen}|${rawData.fontWeight || ''}|${rawData.fontStyle || ''}|${rawData.textDecoration || ''}`;
+  }
+
+  function ensureNodeRectCacheHook(node) {
+    if (!node) return;
+    var proto = Object.getPrototypeOf(node);
+    if (!proto || proto._hasFastSizeCache || typeof proto.getNodeRect !== 'function') return;
+    var origGetNodeRect = proto.getNodeRect;
+    proto.getNodeRect = function () {
+      if (this.isUseCustomNodeContent && this.isUseCustomNodeContent() &&
+          (!this.hasCustomWidth || !this.hasCustomWidth()) &&
+          this._mmSizeCacheKey && sizeCache.has(this._mmSizeCacheKey)) {
+        var cached = sizeCache.get(this._mmSizeCacheKey);
+        return { width: cached.width, height: cached.height };
+      }
+      var rect = origGetNodeRect.apply(this, arguments);
+      if (this.isUseCustomNodeContent && this.isUseCustomNodeContent() &&
+          (!this.hasCustomWidth || !this.hasCustomWidth()) &&
+          this._mmSizeCacheKey && rect && rect.width > 0 && rect.height > 0) {
+        sizeCache.set(this._mmSizeCacheKey, { width: rect.width, height: rect.height });
+      }
+      return rect;
+    };
+    proto._hasFastSizeCache = true;
+  }
+
+  function batchPreMeasureTree(treeRoot, containerEl, options) {
+    if (!treeRoot || !containerEl || typeof document === 'undefined') return;
+    var pending = [];
+
+    function walk(nodeObj, layerIndex) {
+      if (!nodeObj) return;
+      var d = nodeObj.data || {};
+      var key = computeSizeCacheKey(d, layerIndex);
+      if (key && !sizeCache.has(key)) {
+        var fakeNode = {
+          isRoot: layerIndex === 0,
+          layerIndex: layerIndex,
+          nodeData: nodeObj
+        };
+        var cardEl = renderNodeContent(fakeNode, options);
+        nodeObj._preRenderedCard = cardEl;
+        nodeObj._preRenderedKey = key;
+        var wrap = document.createElement('div');
+        wrap.style.cssText = 'position:fixed;left:-99999px;top:-99999px;';
+        wrap.appendChild(cardEl);
+        pending.push({ wrap: wrap, cardEl: cardEl, key: key });
+      }
+      if (d.expand !== false && Array.isArray(nodeObj.children)) {
+        for (var i = 0; i < nodeObj.children.length; i++) {
+          walk(nodeObj.children[i], layerIndex + 1);
+        }
+      }
+    }
+
+    walk(treeRoot, 0);
+    if (pending.length === 0) return;
+
+    if (!batchMeasureHost || !batchMeasureHost.parentNode) {
+      batchMeasureHost = document.createElement('div');
+      batchMeasureHost.style.cssText = 'position:fixed;left:-99999px;top:-99999px;pointer-events:none;visibility:hidden;';
+      containerEl.appendChild(batchMeasureHost);
+    }
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < pending.length; i++) {
+      frag.appendChild(pending[i].wrap);
+    }
+    batchMeasureHost.appendChild(frag);
+
+    for (var j = 0; j < pending.length; j++) {
+      var item = pending[j];
+      var r = (item.cardEl && item.cardEl.getBoundingClientRect) ? item.cardEl.getBoundingClientRect() : item.wrap.getBoundingClientRect();
+      if (r && r.width > 0 && r.height > 0) {
+        sizeCache.set(item.key, { width: Math.ceil(r.width), height: Math.ceil(r.height) });
+      }
+    }
+
+    for (var k = 0; k < pending.length; k++) {
+      if (pending[k].cardEl.parentNode === pending[k].wrap) {
+        pending[k].wrap.removeChild(pending[k].cardEl);
+      }
+    }
+    batchMeasureHost.innerHTML = '';
+  }
+
   function renderNodeContent(node, options) {
+    ensureNodeRectCacheHook(node);
     const opts = options || {};
     const rawData = (node.nodeData && node.nodeData.data) || {};
+    const layerIndex = node.layerIndex !== undefined ? node.layerIndex : (node.isRoot ? 0 : 2);
+    const cacheKey = computeSizeCacheKey(rawData, layerIndex);
+    node._mmSizeCacheKey = cacheKey;
+
+    if (node.nodeData && node.nodeData._preRenderedCard && node.nodeData._preRenderedKey === cacheKey) {
+      const preCard = node.nodeData._preRenderedCard;
+      delete node.nodeData._preRenderedCard;
+      delete node.nodeData._preRenderedKey;
+      return preCard;
+    }
+
     let text = rawData.text || '';
     text = normalizeInlineHighlights(stripOuterParagraph(text));
 
-    // 1. 若全局存在 MarkdownLatexEngine，进行行内公式与 Markdown 编译
-    let renderedHtml = '';
-    if (global.MarkdownLatexEngine && typeof global.MarkdownLatexEngine.renderInline === 'function') {
-      renderedHtml = global.MarkdownLatexEngine.renderInline(text);
-    } else {
-      renderedHtml = String(text)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+    // 1. 若全局存在 MarkdownLatexEngine，进行行内公式与 Markdown 编译（带内存级缓存）
+    let renderedHtml = htmlCache.get(text);
+    if (renderedHtml === undefined) {
+      if (global.MarkdownLatexEngine && typeof global.MarkdownLatexEngine.renderInline === 'function') {
+        renderedHtml = global.MarkdownLatexEngine.renderInline(text);
+      } else {
+        renderedHtml = String(text)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+      if (!renderedHtml || renderedHtml.trim() === '') {
+        renderedHtml = '&nbsp;';
+      }
+      htmlCache.set(text, renderedHtml);
     }
 
-    if (!renderedHtml || renderedHtml.trim() === '') {
-      renderedHtml = '&nbsp;';
-    }
-
-    // 2. 确定层级索引 (0 为根节点，1 为一级分支卡片，2 为二级分类卡片，3 及以上为紧凑条目节点)
-    const layerIndex = node.layerIndex !== undefined ? node.layerIndex : (node.isRoot ? 0 : 2);
+    // 2. 确定层级角色
     const role = rawData.role || '';
 
     // 3. 构建紧凑卡片 DOM
@@ -90,7 +202,7 @@
     if (rawData.tagType === 'pending' || (rawData.tag && String(rawData.tag).startsWith('待确认'))) {
       cardClasses += ' is-pending-node';
     }
-    if (rawData.uid && /^kp_gs\d+_\d+_/.test(rawData.uid)) {
+    if (rawData.isCatalogLeaf || (rawData.uid && /^kp_gs\d+_\d+_/.test(rawData.uid))) {
       cardClasses += ' mm-catalog-leaf';
     }
     const rawResonanceTargets = rawData.associativeLineTargets || rawData.resonanceLinks;
@@ -140,12 +252,23 @@
       const linkBtn = document.createElement('button');
       linkBtn.type = 'button';
       linkBtn.className = 'mm-node-action-pill action-resonance mm-pill-resonance mm-node-resonance-pill';
-      linkBtn.title = '点击聚焦关联知识点与破题招法';
+      linkBtn.title = '左键点击此徽标或右键节点聚拢关联知识点、考点与解法';
       linkBtn.textContent = `关联 ${resonanceTargets.length}`;
+      linkBtn.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+      });
+      linkBtn.addEventListener('mouseup', (e) => {
+        e.stopPropagation();
+      });
       linkBtn.addEventListener('click', (e) => {
         e.stopPropagation();
+        e.preventDefault();
         if (typeof opts.onResonanceClick === 'function') {
-          opts.onResonanceClick(rawData.uid, rawData);
+          opts.onResonanceClick(rawData.uid, rawData, linkBtn);
+        } else if (typeof opts.onActionClick === 'function') {
+          opts.onActionClick('resonance', rawData.uid, rawData, linkBtn);
+        } else if (global.CognitiveViewController && typeof global.CognitiveViewController.toggleNodeCluster === 'function') {
+          global.CognitiveViewController.toggleNodeCluster(rawData.uid);
         } else if (global.CognitiveViewController && typeof global.CognitiveViewController.toggleFocusResonanceByUid === 'function') {
           global.CognitiveViewController.toggleFocusResonanceByUid(rawData.uid);
         } else if (global.CognitiveViewController && typeof global.CognitiveViewController.applyFocusResonanceByUid === 'function') {
@@ -199,6 +322,8 @@
 
   global.MindMapNodeRenderer = {
     render: renderNodeContent,
+    batchPreMeasureTree: batchPreMeasureTree,
+    computeSizeCacheKey: computeSizeCacheKey,
     stripOuterParagraph: stripOuterParagraph,
     normalizeInlineHighlights: normalizeInlineHighlights
   };

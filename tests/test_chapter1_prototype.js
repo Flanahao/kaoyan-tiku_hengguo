@@ -643,11 +643,14 @@ async function runTests() {
       }))()
     `);
 
-    // 在认知视图开启时连续发送底层题库敏感快捷键：'1' / '2' (熟练/生疏)、'd' (下一题)、'j' (下一题)、'm' (切换大纲/SM2)、'h' (导图帮助/题库帮助)
+    // 在认知视图开启时连续发送底层题库敏感快捷键：'1' / '2' (熟练/生疏)、'd' / 'a' (导图切章 vs 题库切题)、'j' (下一题)、'm' (切换大纲/SM2)、'h' (导图帮助/题库帮助)
     await dispatchKey(ws, '1', 'Digit1', 49);
     await sleep(300);
     await dispatchKey(ws, '2', 'Digit2', 50);
     await dispatchKey(ws, 'd', 'KeyD', 68);
+    await sleep(220);
+    await dispatchKey(ws, 'a', 'KeyA', 65);
+    await sleep(220);
     await dispatchKey(ws, 'j', 'KeyJ', 74);
     await sleep(400);
 
@@ -1285,7 +1288,7 @@ async function runTests() {
       throw new Error(`静默自动持久化校验失败: ${JSON.stringify(persistenceCheck)}`);
     }
 
-    // 10.4 校验双层导图接口预留 (L1宏观全量骨架 vs L2微观章节展开)
+    // 10.4 校验双层导图接口 (L1宏观全量正品字△同构总览 vs L2微观章节展开)
     const macroTreeCheck = await evaluate(ws, `
       (() => {
         const ctrl = window.CognitiveViewController;
@@ -1296,12 +1299,11 @@ async function runTests() {
         if (!macroTree || !macroTree.data) return { ok: false, error: '未能生成学科宏观骨架树' };
 
         const rootText = macroTree.data.text;
-        const ch1 = macroTree.children && macroTree.children[0];
-        const ch1Text = ch1 && ch1.data && ch1.data.text;
-        const sectors = ch1 && ch1.children ? ch1.children.map(c => c.data && c.data.text) : [];
-        
-        const knowBranch = ch1 && ch1.children ? ch1.children.find(c => c.data && c.data.uid === 'branch_knowledge') : null;
-        const sec1 = knowBranch && knowBranch.children ? knowBranch.children[0] : null;
+        const sectors = macroTree.children ? macroTree.children.map(c => c.data && c.data.text) : [];
+        const knowBranch = macroTree.children ? macroTree.children.find(c => c.data && c.data.uid === 'branch_knowledge') : null;
+        const ch1Know = knowBranch && knowBranch.children ? knowBranch.children.find(c => c.data && c.data.uid === 'macro_know_math_ch1') : null;
+        const ch1Text = ch1Know && ch1Know.data && ch1Know.data.text;
+        const sec1 = ch1Know && ch1Know.children ? ch1Know.children[0] : null;
         const sec1Sub = sec1 && sec1.children ? sec1.children[0] : null;
         const sec1SubChildrenCount = sec1Sub && sec1Sub.children ? sec1Sub.children.length : -1;
 
@@ -1310,13 +1312,14 @@ async function runTests() {
           rootText: rootText,
           ch1Text: ch1Text,
           sectors: sectors,
+          knowChapterCount: knowBranch && knowBranch.children ? knowBranch.children.length : 0,
           sec1SubText: sec1Sub ? sec1Sub.data.text : '',
           sec1SubChildrenCount: sec1SubChildrenCount
         };
       })()
     `);
-    console.log(`  - 双层导图宏观骨架: 学科="${macroTreeCheck.rootText}", 章节="${macroTreeCheck.ch1Text}", 扇区=[${macroTreeCheck.sectors.join(', ')}], 节点剪枝深度=${macroTreeCheck.sec1SubChildrenCount === 0 ? '已精确剪枝至1.1骨架' : '未剪枝'}`);
-    if (!macroTreeCheck.ok || !macroTreeCheck.rootText.includes('高等数学') || !macroTreeCheck.ch1Text.includes('函数与极限') || macroTreeCheck.sec1SubChildrenCount !== 0) {
+    console.log(`  - 双层导图宏观骨架: 学科="${macroTreeCheck.rootText}", 扇区=[${macroTreeCheck.sectors.join(', ')}], 章节数=${macroTreeCheck.knowChapterCount}, 示例章节="${macroTreeCheck.ch1Text}", 节点剪枝深度=${macroTreeCheck.sec1SubChildrenCount === 0 ? '已精确剪枝至1.1骨架' : '未剪枝'}`);
+    if (!macroTreeCheck.ok || !macroTreeCheck.rootText.includes('高等数学') || !macroTreeCheck.ch1Text.includes('函数与极限') || macroTreeCheck.knowChapterCount !== 10 || macroTreeCheck.sec1SubChildrenCount !== 0) {
       throw new Error(`双层导图宏观骨架接口校验失败: ${JSON.stringify(macroTreeCheck)}`);
     }
 
@@ -1770,9 +1773,10 @@ async function runTests() {
         ];
         const missingSyncIds = expectedSyncIds.filter(id => !syncBlocks[id]);
 
-        // 3. 校验 L1 宏观学科树包含全部 10 章
+        // 3. 校验 L1 宏观学科树各扇区包含全部 10 章
         const macroTree = ctrl.buildSubjectMacroTree('math', 3);
-        const macroChapterCount = (macroTree && Array.isArray(macroTree.children)) ? macroTree.children.length : 0;
+        const knowSector = (macroTree && Array.isArray(macroTree.children)) ? macroTree.children.find(c => c.data && c.data.uid === 'branch_knowledge') : null;
+        const macroChapterCount = (knowSector && Array.isArray(knowSector.children)) ? knowSector.children.length : 0;
 
         // 4. 校验全部 10 章树结构、同步块注水与零 Emoji / 禁词，并验证动态切换章节渲染
         const chapterSummaries = [];
@@ -1851,6 +1855,235 @@ async function runTests() {
       throw new Error(`全 10 章导图或路由校验失败: ${JSON.stringify(allChaptersCheck)}`);
     }
     console.log('  PASS: 高数全 10 章 (第0章~第9章) 导图结构、跨习题册路由映射、5大同步块注水与文案洁癖校验 100% 通过');
+
+    // ─────────────────────────────────────────────────────────────
+    // 测试用例 13：S 键全量层/章节层切换、A/D 切章、全量层 Q/W/E、L1->L2 写穿持久化与 O 键跨刷新状态记忆
+    // ─────────────────────────────────────────────────────────────
+    console.log('\n[Test 13] 校验 S 键全量层/章节层切换、A/D 切章、全量层 Q/W/E、改动写穿与 O 键刷新状态保留...');
+
+    // 13.1 打开第 1 章，验证左下角状态胶囊与 A / D 章节循环切换
+    await evaluate(ws, `window.CognitiveViewController.open({ subject: 'math', chapterId: 'math_ch1' })`);
+    await sleep(350);
+
+    // 按 D 切到下一章 (math_ch2)
+    await dispatchKey(ws, 'd', 'KeyD', 68);
+    await sleep(350);
+    const afterNextCh = await evaluate(ws, `
+      (() => ({
+        chId: window.CognitiveViewController.getCurrentChapterId(),
+        layerMode: window.CognitiveViewController.getLayerMode(),
+        capsuleLabel: document.getElementById('dockChapterLabel')?.textContent || '',
+        toggleBtnText: document.getElementById('btnDockToggleLayer')?.textContent || '',
+        hasCh2Root: Boolean(document.querySelector('#cognitiveMindMapContainer [data-node-uid="root_chapter_2"]'))
+      }))()
+    `);
+    console.log(`  - 章节层按 D 切下一章: currentChapterId=${afterNextCh.chId}, 胶囊="${afterNextCh.capsuleLabel}", 按钮="${afterNextCh.toggleBtnText}"`);
+    if (afterNextCh.chId !== 'math_ch2' || afterNextCh.layerMode !== 'chapter' || !afterNextCh.hasCh2Root || !afterNextCh.capsuleLabel.includes('第2章')) {
+      throw new Error(`章节层按 D 键切章失败: ${JSON.stringify(afterNextCh)}`);
+    }
+
+    // 连续按 3 次 A：math_ch2 -> math_ch1 -> math_ch0 -> math_ch9 (环形循环)
+    await dispatchKey(ws, 'a', 'KeyA', 65);
+    await sleep(250);
+    await dispatchKey(ws, 'a', 'KeyA', 65);
+    await sleep(250);
+    await dispatchKey(ws, 'a', 'KeyA', 65);
+    await sleep(350);
+    const afterWrapPrevCh = await evaluate(ws, `
+      (() => ({
+        chId: window.CognitiveViewController.getCurrentChapterId(),
+        capsuleLabel: document.getElementById('dockChapterLabel')?.textContent || '',
+        hasCh9Root: Boolean(document.querySelector('#cognitiveMindMapContainer [data-node-uid="root_chapter_9"]'))
+      }))()
+    `);
+    console.log(`  - 章节层按 A 环形回绕: currentChapterId=${afterWrapPrevCh.chId}, 胶囊="${afterWrapPrevCh.capsuleLabel}"`);
+    if (afterWrapPrevCh.chId !== 'math_ch9' || !afterWrapPrevCh.hasCh9Root) {
+      throw new Error(`章节层按 A 键环形回绕至 math_ch9 失败: ${JSON.stringify(afterWrapPrevCh)}`);
+    }
+
+    // 按 D 切回 math_ch0，再按 D 切回 math_ch1
+    await dispatchKey(ws, 'd', 'KeyD', 68);
+    await sleep(220);
+    await dispatchKey(ws, 'd', 'KeyD', 68);
+    await sleep(320);
+
+    // 13.2 按 S 键切换进入 L1 全量层 (正品字 △ 同构总览)
+    await dispatchKey(ws, 's', 'KeyS', 83);
+    await sleep(450);
+    const macroEnterCheck = await evaluate(ws, `
+      (() => {
+        const ctrl = window.CognitiveViewController;
+        const rectOf = (uid) => {
+          const el = document.querySelector('#cognitiveMindMapContainer [data-node-uid="' + uid + '"]');
+          return el ? el.getBoundingClientRect() : null;
+        };
+        const rRoot = rectOf('root_subject_math');
+        const rExam = rectOf('branch_exam_points');
+        const rKnow = rectOf('branch_knowledge');
+        const rMeth = rectOf('branch_methods');
+        const toggleBtn = document.getElementById('btnDockToggleLayer');
+        return {
+          layerMode: ctrl.getLayerMode(),
+          currentChapterId: ctrl.getCurrentChapterId(),
+          hasMacroRoot: Boolean(rRoot),
+          isTriangleLayout: Boolean(
+            rRoot && rExam && rKnow && rMeth &&
+            rExam.bottom < rRoot.top &&
+            rKnow.right < rRoot.left &&
+            rMeth.left > rRoot.right
+          ),
+          hasCh0Know: Boolean(document.querySelector('#cognitiveMindMapContainer [data-node-uid="macro_know_math_ch0"]')),
+          hasCh9Know: Boolean(document.querySelector('#cognitiveMindMapContainer [data-node-uid="macro_know_math_ch9"]')),
+          isMacroBtnActive: Boolean(toggleBtn && toggleBtn.classList.contains('is-macro-active')),
+          capsuleLabel: document.getElementById('dockChapterLabel')?.textContent || ''
+        };
+      })()
+    `);
+    console.log(`  - 按 S 键进入 L1 全量层: layerMode=${macroEnterCheck.layerMode}, 正品字△方位=${macroEnterCheck.isTriangleLayout}, 含第0~9章=${macroEnterCheck.hasCh0Know && macroEnterCheck.hasCh9Know}, 胶囊="${macroEnterCheck.capsuleLabel}"`);
+    if (macroEnterCheck.layerMode !== 'subject_macro' || !macroEnterCheck.hasMacroRoot || !macroEnterCheck.isTriangleLayout || !macroEnterCheck.hasCh0Know || !macroEnterCheck.hasCh9Know || !macroEnterCheck.isMacroBtnActive) {
+      throw new Error(`按 S 键进入 L1 全量层校验失败: ${JSON.stringify(macroEnterCheck)}`);
+    }
+    await captureScreenshot(ws, 'math_macro_layer_overview.png');
+
+    // 13.3 全量层下按 Q / W / E 与 A / D 巡航
+    await dispatchKey(ws, 'q', 'KeyQ', 81);
+    await sleep(350);
+    await dispatchKey(ws, 'q', 'KeyQ', 81);
+    await sleep(350);
+    const macroQCycleCheck = await evaluate(ws, `
+      (() => ({
+        focusedChAfterQ2: window.CognitiveViewController.getMacroFocusedChapterId(),
+        hasCh0Sec1Expanded: Boolean(document.querySelector('#cognitiveMindMapContainer [data-node-uid="sec_1_logic"]'))
+      }))()
+    `);
+    console.log(`  - 全量层连按 Q 键巡航: focusedChapter=${macroQCycleCheck.focusedChAfterQ2}, 第0章分节展开=${macroQCycleCheck.hasCh0Sec1Expanded}`);
+    if (macroQCycleCheck.focusedChAfterQ2 !== 'math_ch0' || !macroQCycleCheck.hasCh0Sec1Expanded) {
+      throw new Error(`全量层 Q 键巡航异常: ${JSON.stringify(macroQCycleCheck)}`);
+    }
+
+    await dispatchKey(ws, 'w', 'KeyW', 87);
+    await sleep(300);
+    await dispatchKey(ws, 'e', 'KeyE', 69);
+    await sleep(300);
+
+    // 在全量层按 D 键，从当前聚焦的 math_ch0 切到 math_ch1，再按 D 切到 math_ch2
+    await dispatchKey(ws, 'd', 'KeyD', 68);
+    await sleep(250);
+    await dispatchKey(ws, 'd', 'KeyD', 68);
+    await sleep(350);
+    const macroADCheck = await evaluate(ws, `
+      (() => ({
+        focusedCh: window.CognitiveViewController.getMacroFocusedChapterId(),
+        capsuleLabel: document.getElementById('dockChapterLabel')?.textContent || ''
+      }))()
+    `);
+    console.log(`  - 全量层按 D 键定位章节: focusedCh=${macroADCheck.focusedCh}, 胶囊="${macroADCheck.capsuleLabel}"`);
+    if (macroADCheck.focusedCh !== 'math_ch2' || !macroADCheck.capsuleLabel.includes('第2章')) {
+      throw new Error(`全量层 D 键定位章节失败: ${JSON.stringify(macroADCheck)}`);
+    }
+
+    // 13.4 全量层修改写穿 (Write-Through Persistence) 到对应章节 (math_ch2)
+    const writeThroughSetup = await evaluate(ws, `
+      (() => {
+        const ctrl = window.CognitiveViewController;
+        const mm = ctrl.getInstance();
+        const sm = ctrl.getShortcutManager();
+        // 在全量层中找到第2章的知识点节点 k_ch2_sec1 并设置高亮色为 green
+        const targetNode = mm.renderer.findNodeByUid('k_ch2_sec1');
+        if (!targetNode) return { ok: false, error: '全量层未找到 k_ch2_sec1 节点' };
+        sm.toggleNodeHighlight(targetNode, 'green');
+        ctrl.persistCurrentMindMapState(true);
+        return {
+          ok: true,
+          macroColor: targetNode.getData('highlightColor')
+        };
+      })()
+    `);
+    if (!writeThroughSetup.ok || writeThroughSetup.macroColor !== 'green') {
+      throw new Error(`全量层修改节点高亮失败: ${JSON.stringify(writeThroughSetup)}`);
+    }
+
+    // 此时在全量层已聚焦 math_ch2，直接按 S 键下钻进入第 2 章章节层，校验刚才在全量层的修改已同步生效！
+    await dispatchKey(ws, 's', 'KeyS', 83);
+    await sleep(400);
+    const writeThroughVerify = await evaluate(ws, `
+      (() => {
+        const ctrl = window.CognitiveViewController;
+        const mm = ctrl.getInstance();
+        const sm = ctrl.getShortcutManager();
+        const chId = ctrl.getCurrentChapterId();
+        const layerMode = ctrl.getLayerMode();
+        const ch2Node = mm.renderer.findNodeByUid('k_ch2_sec1');
+        const ch2Color = ch2Node ? ch2Node.getData('highlightColor') : '';
+        // 清理测试高亮色
+        if (ch2Node && sm) {
+          sm.toggleNodeHighlight(ch2Node, 'none');
+          ctrl.persistCurrentMindMapState(true);
+        }
+        return {
+          chId,
+          layerMode,
+          ch2Color
+        };
+      })()
+    `);
+    console.log(`  - 全量层按 S 下钻至聚焦章并验证写穿: layerMode=${writeThroughVerify.layerMode}, chId=${writeThroughVerify.chId}, 章节层节点高亮色="${writeThroughVerify.ch2Color}"`);
+    if (writeThroughVerify.layerMode !== 'chapter' || writeThroughVerify.chId !== 'math_ch2' || writeThroughVerify.ch2Color !== 'green') {
+      throw new Error(`全量层修改写穿至章节层校验失败: ${JSON.stringify(writeThroughVerify)}`);
+    }
+
+    // 13.5 校验 O 键状态保留与跨页面刷新 (Page.reload) 自动停留在 O 键状态
+    // 切换进入全量层，并将 L 键关联线设为静音 (false)，然后执行页面刷新
+    await dispatchKey(ws, 's', 'KeyS', 83);
+    await sleep(350);
+    const beforeReloadState = await evaluate(ws, `
+      (() => {
+        const ctrl = window.CognitiveViewController;
+        ctrl.toggleAssociativeLines(false);
+        ctrl.saveCognitiveState({ isOpen: true });
+        return {
+          isOpen: ctrl.isOpen(),
+          layerMode: ctrl.getLayerMode(),
+          isAssocVisible: ctrl.isAssociativeLineVisible(),
+          savedRaw: localStorage.getItem('kaoyan.g.cognitive_state')
+        };
+      })()
+    `);
+    console.log(`  - 刷新前认知状态: isOpen=${beforeReloadState.isOpen}, layerMode=${beforeReloadState.layerMode}, L键显线=${beforeReloadState.isAssocVisible}`);
+
+    await sendCDP(ws, 'Page.reload', { ignoreCache: false });
+    await sleep(2200);
+
+    const afterReloadState = await evaluate(ws, `
+      (() => {
+        const ctrl = window.CognitiveViewController;
+        const modal = document.getElementById('cognitiveModal');
+        return {
+          isOpen: Boolean(ctrl && ctrl.isOpen()),
+          modalShown: Boolean(modal && modal.classList.contains('show')),
+          layerMode: ctrl ? ctrl.getLayerMode() : '',
+          currentChapterId: ctrl ? ctrl.getCurrentChapterId() : '',
+          isAssocVisible: ctrl ? ctrl.isAssociativeLineVisible() : true,
+          hasMacroRootDom: Boolean(document.querySelector('#cognitiveMindMapContainer [data-node-uid="root_subject_math"]'))
+        };
+      })()
+    `);
+    console.log(`  - 页面刷新后自动恢复校验: isOpen=${afterReloadState.isOpen}, modalShown=${afterReloadState.modalShown}, layerMode=${afterReloadState.layerMode}, L键显线=${afterReloadState.isAssocVisible}, 全量层根节点=${afterReloadState.hasMacroRootDom}`);
+    if (!afterReloadState.isOpen || !afterReloadState.modalShown || afterReloadState.layerMode !== 'subject_macro' || afterReloadState.isAssocVisible !== false || !afterReloadState.hasMacroRootDom) {
+      throw new Error(`页面刷新后未能保持在 O 键状态或状态恢复不完整: ${JSON.stringify(afterReloadState)}`);
+    }
+
+    // 恢复默认状态并关闭
+    await evaluate(ws, `
+      (() => {
+        const ctrl = window.CognitiveViewController;
+        ctrl.toggleAssociativeLines(true);
+        ctrl.loadChapter('math_ch1');
+        ctrl.close();
+      })()
+    `);
+    await sleep(250);
+    console.log('  PASS: S 键全量层/章节层切换、A/D 切章、全量层 Q/W/E、L1->L2 写穿持久化与 O 键跨刷新状态记忆 100% 通过');
 
     console.log('\n================================================================');
     console.log('  第一章认知视图与 MindMap 独立工具集全量 CDP E2E 测试通过 (PASS)');

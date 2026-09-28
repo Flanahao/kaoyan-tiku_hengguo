@@ -114,7 +114,7 @@
     // 确保 kaoyan.g.* 核心全局键与 UI 偏好在采集时处于最新状态并统一格式
     if (typeof window !== 'undefined' && window.StorageEngine) {
       if (window.StorageEngine.GlobalStore) {
-        ['topics', 'affinity', 'study_log', 'theme', 'dark_img_filter', 'filters', 'resume', 'subject', 'sub_mode', 'english_mode'].forEach(name => {
+        ['topics', 'affinity', 'study_log', 'theme', 'dark_img_filter', 'filters', 'resume', 'subject', 'sub_mode', 'english_mode', 'cognitive_state', 'mindmap_sync_blocks'].forEach(name => {
           const val = window.StorageEngine.GlobalStore.get(name);
           if (val !== null && val !== undefined) {
             dump['kaoyan.g.' + name] = JSON.stringify(val);
@@ -193,6 +193,9 @@
     if (typeof window.renderCountdown === 'function') window.renderCountdown();
     if (typeof window.loadRelatedTopics === 'function') window.loadRelatedTopics();
     if (typeof window.renderRelatedQuestions === 'function') window.renderRelatedQuestions();
+    if (window.CognitiveViewController && typeof window.CognitiveViewController.onStorageRefresh === 'function') {
+      window.CognitiveViewController.onStorageRefresh();
+    }
     if (typeof window.applyTheme === 'function') {
       const curT = (window.StorageEngine && window.StorageEngine.GlobalStore && window.StorageEngine.GlobalStore.get('theme')) || 'light';
       window.applyTheme(curT);

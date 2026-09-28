@@ -202,6 +202,30 @@
               }
               return;
             }
+            if (k === 's') {
+              e.preventDefault();
+              e.stopPropagation();
+              if (window.CognitiveViewController && typeof window.CognitiveViewController.toggleLayerMode === 'function') {
+                window.CognitiveViewController.toggleLayerMode();
+              }
+              return;
+            }
+            if (k === 'a') {
+              e.preventDefault();
+              e.stopPropagation();
+              if (window.CognitiveViewController && typeof window.CognitiveViewController.navigateChapter === 'function') {
+                window.CognitiveViewController.navigateChapter(-1);
+              }
+              return;
+            }
+            if (k === 'd') {
+              e.preventDefault();
+              e.stopPropagation();
+              if (window.CognitiveViewController && typeof window.CognitiveViewController.navigateChapter === 'function') {
+                window.CognitiveViewController.navigateChapter(1);
+              }
+              return;
+            }
           }
         }
 
@@ -360,6 +384,24 @@
       }
 
       const nodeUid = node.getData('uid');
+      if (this.mindMap.renderer && this.mindMap.renderer.renderTree && nodeUid) {
+        const syncTreeNode = (n) => {
+          if (!n) return;
+          if (n.data && n.data.uid === nodeUid) {
+            if (targetColor) {
+              n.data.highlightColor = targetColor;
+            } else {
+              delete n.data.highlightColor;
+            }
+            n.data.text = text;
+          }
+          if (Array.isArray(n.children)) {
+            n.children.forEach(syncTreeNode);
+          }
+        };
+        syncTreeNode(this.mindMap.renderer.renderTree);
+      }
+
       this.mindMap.execCommand('SET_NODE_DATA', node, {
         highlightColor: targetColor,
         text: text
@@ -371,6 +413,9 @@
             this.mindMap.renderer.clearActiveNodeList();
             this.mindMap.renderer.addNodeToActiveList(freshNode);
           }
+        }
+        if (global.CognitiveViewController && typeof global.CognitiveViewController.persistCurrentMindMapState === 'function') {
+          global.CognitiveViewController.persistCurrentMindMapState();
         }
       });
     }
@@ -387,15 +432,36 @@
       const formalTagType = node.getData('formalTagType') || 'warn';
       const nodeUid = node.getData('uid');
 
+      if (node.nodeData && node.nodeData.data) {
+        delete node.nodeData.data.formalTag;
+        delete node.nodeData.data.formalTagType;
+        delete node.nodeData.data.pendingSource;
+      }
+
+      if (this.mindMap.renderer && this.mindMap.renderer.renderTree && nodeUid) {
+        const syncTreeNode = (n) => {
+          if (!n) return;
+          if (n.data && n.data.uid === nodeUid) {
+            n.data.tag = formalTag;
+            n.data.tagType = formalTagType;
+            delete n.data.formalTag;
+            delete n.data.formalTagType;
+            delete n.data.pendingSource;
+          }
+          if (Array.isArray(n.children)) {
+            n.children.forEach(syncTreeNode);
+          }
+        };
+        syncTreeNode(this.mindMap.renderer.renderTree);
+      }
+
       this.mindMap.execCommand('SET_NODE_DATA', node, {
         tag: formalTag,
         tagType: formalTagType
       });
 
-      if (node.nodeData && node.nodeData.data) {
-        delete node.nodeData.data.formalTag;
-        delete node.nodeData.data.formalTagType;
-        delete node.nodeData.data.pendingSource;
+      if (global.CognitiveViewController && typeof global.CognitiveViewController.persistCurrentMindMapState === 'function') {
+        global.CognitiveViewController.persistCurrentMindMapState(true);
       }
 
       this.mindMap.render(() => {
@@ -407,7 +473,7 @@
           }
         }
         if (global.CognitiveViewController && typeof global.CognitiveViewController.persistCurrentMindMapState === 'function') {
-          global.CognitiveViewController.persistCurrentMindMapState();
+          global.CognitiveViewController.persistCurrentMindMapState(true);
         }
       });
     }
@@ -417,8 +483,24 @@
       if (!node) return;
       const cur = node.getData(key);
       const target = (cur === value) ? '' : value;
+      const nodeUid = node.getData('uid');
+      if (this.mindMap.renderer && this.mindMap.renderer.renderTree && nodeUid) {
+        const syncStyle = (n) => {
+          if (!n) return;
+          if (n.data && n.data.uid === nodeUid) {
+            if (target) n.data[key] = target;
+            else delete n.data[key];
+          }
+          if (Array.isArray(n.children)) n.children.forEach(syncStyle);
+        };
+        syncStyle(this.mindMap.renderer.renderTree);
+      }
       this.mindMap.execCommand('SET_NODE_DATA', node, { [key]: target });
-      this.mindMap.render();
+      this.mindMap.render(() => {
+        if (global.CognitiveViewController && typeof global.CognitiveViewController.persistCurrentMindMapState === 'function') {
+          global.CognitiveViewController.persistCurrentMindMapState();
+        }
+      });
     }
 
     // 创建节点副本 (Ctrl + D)
@@ -428,6 +510,9 @@
       if (!parent || !parent.nodeData || !Array.isArray(parent.nodeData.children)) return;
 
       const cloned = safeCloneNodeData(node.nodeData);
+      if (cloned && cloned.data) {
+        delete cloned.data.sourceNodeUid;
+      }
       const index = parent.nodeData.children.findIndex(child => child.data && child.data.uid === node.getData('uid'));
       if (index !== -1) {
         parent.nodeData.children.splice(index + 1, 0, cloned);
@@ -437,6 +522,9 @@
             this.mindMap.renderer.clearActiveNodeList();
             this.mindMap.renderer.addNodeToActiveList(newNode);
           }
+          if (global.CognitiveViewController && typeof global.CognitiveViewController.persistCurrentMindMapState === 'function') {
+            global.CognitiveViewController.persistCurrentMindMapState();
+          }
         });
       }
     }
@@ -444,12 +532,16 @@
     // 进入当前节点聚焦钻取 (Ctrl + ])
     drillDown(node) {
       if (!node || node.isRoot) return;
+      const targetUid = node.getData('uid');
+      if (global.CognitiveViewController && typeof global.CognitiveViewController.isClusterActive === 'function' && global.CognitiveViewController.isClusterActive()) {
+        global.CognitiveViewController.exitClusterMode({ restoreOnly: true });
+      }
       const currentFullTree = this.mindMap.getData(false);
       const nodeText = (node.getData('text') || '聚焦节点').replace(/<[^>]+>/g, '').trim();
 
       this.drillStack.push({
         fullTree: JSON.parse(JSON.stringify(currentFullTree)),
-        targetUid: node.getData('uid'),
+        targetUid: targetUid,
         title: nodeText
       });
 
@@ -509,45 +601,77 @@
       }
     }
 
-    // 按指定层级展开导图 (递进式三级梯度：1=分节骨架，2=核心全景同级对齐，3=全量微观详情可读聚焦)
+    // 按指定层级展开导图 (递进式三级梯度：1=分节骨架，2=核心全景同级对齐，3=全量微观详情全局展示)
     expandToLevel(level = 2) {
       this.categoryCycleState = { category: null, stepIndex: 0 };
 
-      const treeData = this.mindMap.getData(false);
+      let treeModified = false;
+      if (global.CognitiveViewController && typeof global.CognitiveViewController.isClusterActive === 'function' && global.CognitiveViewController.isClusterActive()) {
+        global.CognitiveViewController.exitClusterMode({ restoreOnly: true });
+        treeModified = true;
+      }
+      const setNodeExpandFlag = (node, val) => {
+        if (!node) return;
+        if (!node.data) node.data = {};
+        if (node.data.expand !== val) {
+          node.data.expand = val;
+          treeModified = true;
+          if (!val && node._node && typeof node._node.removeLine === 'function') {
+            node._node.removeLine();
+          }
+        }
+      };
+
+      const treeData = (this.mindMap.renderer && this.mindMap.renderer.renderTree) || this.mindMap.getData(false);
       if (treeData) {
+        const isMacroRoot = Boolean(treeData.data && treeData.data.isSubjectMacroRoot);
+
         const walk = (node, depth, branchType) => {
           if (!node) return;
           if (!node.data) node.data = {};
           const uid = node.data.uid || '';
 
           let curBranch = branchType;
-          if (uid === 'branch_knowledge' || uid.startsWith('sec_')) curBranch = 'knowledge';
-          else if (uid === 'branch_exam_points' || uid.startsWith('kp_')) curBranch = 'exam';
-          else if (uid === 'branch_methods' || uid.startsWith('m_')) curBranch = 'method';
+          if (uid === 'branch_knowledge' || uid.startsWith('sec_') || uid.startsWith('macro_know_')) curBranch = 'knowledge';
+          else if (uid === 'branch_exam_points' || uid.startsWith('kp_') || uid.startsWith('macro_exam_')) curBranch = 'exam';
+          else if (uid === 'branch_methods' || uid.startsWith('m_') || uid.startsWith('macro_method_')) curBranch = 'method';
 
           if (depth === 0 || depth === 1) {
-            node.data.expand = true;
+            setNodeExpandFlag(node, true);
+          } else if (isMacroRoot) {
+            // L1 全量层：
+            // depth 2 为第0~9章分组卡片 (macro_know_*, macro_exam_*, macro_method_*)
+            // depth 3 在知识点下为 §1~§4 分节，在考点/解法下为具体考点/招法标题
+            if (curBranch === 'knowledge') {
+              if (depth === 2) {
+                setNodeExpandFlag(node, level >= 2);
+              } else if (depth === 3) {
+                setNodeExpandFlag(node, level >= 3);
+              } else {
+                setNodeExpandFlag(node, level >= 3);
+              }
+            } else {
+              if (depth === 2) {
+                setNodeExpandFlag(node, level >= 2);
+              } else {
+                setNodeExpandFlag(node, level >= 3);
+              }
+            }
           } else if (curBranch === 'knowledge') {
             // 知识点体系含有 §1/§2/§3 分节中间层 (depth 2)，其下 1.1~3.3 (depth 3) 与右翼考点/招法 (depth 2) 同属二级核心层：
             // level 1 (分节骨架): §1, §2, §3 自身可见但折叠 (expand=false)，1.1~3.3 收起
             // level 2 (核心全景): §1, §2, §3 展开 (expand=true)，1.1~3.3 可见但内部公式折叠 (expand=false)
-            // level 3 (微观详情): 1.1~3.3 内部定义/定理/公式卡片全部展开 (expand=true)
+            // level 3 (全量展开): 1.1~3.3 内部定义/定理/公式卡片全部展开 (expand=true)
             if (depth === 2) {
-              node.data.expand = (level >= 2);
-            } else if (depth === 3) {
-              node.data.expand = (level >= 3);
+              setNodeExpandFlag(node, level >= 2);
             } else {
-              node.data.expand = (level >= 3);
+              setNodeExpandFlag(node, level >= 3);
             }
           } else {
-            // 考点与解法体系：depth 2 即为 5大考点 与 7大招法（与左翼 depth 3 的 1.1~3.3 同级）
-            // level 1 / level 2: 5大考点与7大招法卡片可见，折叠其下真题题源与解题步骤 (expand=false)
+            // 考点与解法体系：depth 2 即为 5大考点 与 16大招法（与左翼 depth 3 的 1.1~3.3 同级）
+            // level 1 / level 2: 5大考点与16大招法卡片可见，折叠其下真题题源与解题步骤 (expand=false)
             // level 3: 展开具体考点下属的真题题源与招法下属的步骤避坑 (expand=true)
-            if (depth === 2) {
-              node.data.expand = (level >= 3);
-            } else {
-              node.data.expand = (level >= 3);
-            }
+            setNodeExpandFlag(node, level >= 3);
           }
 
           if (Array.isArray(node.children)) {
@@ -556,8 +680,12 @@
         };
 
         walk(treeData, 0, null);
-        this.mindMap.setData(treeData);
-        this.mindMap.render();
+        if (treeModified) {
+          this.mindMap.render();
+          if (global.CognitiveViewController && typeof global.CognitiveViewController.persistCurrentMindMapState === 'function') {
+            global.CognitiveViewController.persistCurrentMindMapState();
+          }
+        }
       }
 
       const outliner = this.options.outliner || window._outlinerInstance;
@@ -565,7 +693,7 @@
         outliner.expandToLevel(level);
       }
       if (typeof this.options.onLevelChange === 'function') {
-        this.options.onLevelChange(level);
+        this.options.onLevelChange(level, treeModified);
       }
     }
 
@@ -590,12 +718,19 @@
       };
 
       let treeModified = false;
+      if (global.CognitiveViewController && typeof global.CognitiveViewController.isClusterActive === 'function' && global.CognitiveViewController.isClusterActive()) {
+        global.CognitiveViewController.exitClusterMode({ restoreOnly: true });
+        treeModified = true;
+      }
       const setNodeExpandFlag = (node, val) => {
         if (!node) return;
         if (!node.data) node.data = {};
         if (node.data.expand !== val) {
           node.data.expand = val;
           treeModified = true;
+          if (!val && node._node && typeof node._node.removeLine === 'function') {
+            node._node.removeLine();
+          }
         }
       };
 
@@ -607,9 +742,10 @@
         }
       };
 
-      const treeData = this.mindMap.getData(false);
+      const treeData = (this.mindMap.renderer && this.mindMap.renderer.renderTree) || this.mindMap.getData(false);
       if (!treeData) return;
 
+      const isMacroRoot = Boolean(treeData.data && treeData.data.isSubjectMacroRoot);
       setNodeExpandFlag(treeData, true);
 
       let targetBranchNode = null;
@@ -619,10 +755,21 @@
           const branchType = classifyBranch(c2);
           if (branchType === targetCategory) {
             targetBranchNode = c2;
-            // 目标分类：递归全量展开到底（各节、定理、公式、招法细节全部展开）
+            // 目标分类：递归全量展开到底
             setSubtreeExpand(c2, true);
+          } else if (isMacroRoot) {
+            // L1 全量层非目标分类：保留 10 章分组展开，折叠其下深层子项
+            setNodeExpandFlag(c2, true);
+            if (Array.isArray(c2.children)) {
+              c2.children.forEach(chGroup => {
+                setNodeExpandFlag(chGroup, true);
+                if (Array.isArray(chGroup.children)) {
+                  chGroup.children.forEach(sub => setSubtreeExpand(sub, false));
+                }
+              });
+            }
           } else {
-            // 非目标分类：严格对齐至二级核心全景态（左翼保留 1.1~3.3 可见，右翼保留 5大考点/7大招法 可见，仅折叠最末级详情叶子）
+            // 非目标分类：严格对齐至二级核心全景态（左翼保留 1.1~3.3 可见，右翼保留 5大考点/16大招法 可见，仅折叠最末级详情叶子）
             setNodeExpandFlag(c2, true);
             if (branchType === 'knowledge') {
               // 知识点分支含有 §1/§2/§3 分节层：展开 §1/§2/§3，使其下 1.1~3.3 节点可见，折叠 1.1~3.3 的内部公式
@@ -635,7 +782,7 @@
                 });
               }
             } else {
-              // 考点与招法分支：直接子节点即为 5大考点 / 7大招法，保持其可见并折叠其内部叶子
+              // 考点与招法分支：直接子节点即为 5大考点 / 16大招法，保持其可见并折叠其内部叶子
               if (Array.isArray(c2.children)) {
                 c2.children.forEach(child => setSubtreeExpand(child, false));
               }
@@ -644,23 +791,97 @@
         });
       }
 
-      // 构建当前分类的分段巡航序列 (Step 0 = 目标分类全树顶部定焦，后续 Step = 子分节/子分组精读定焦)
+      // 构建当前分类的分段巡航序列 (第1次 Q/W/E 侧重展示该分类全局，后续连按逐节/逐章可读定焦)
       const cycleSteps = [];
       if (targetBranchNode && targetBranchNode.data && targetBranchNode.data.uid) {
         const branchUid = targetBranchNode.data.uid;
-        const directChildUids = (targetBranchNode.children || [])
-          .map(ch => ch && ch.data && ch.data.uid)
-          .filter(Boolean);
+        const directChildren = (targetBranchNode.children || []).filter(ch => ch && ch.data && ch.data.uid);
+        const directChildUids = directChildren.map(ch => ch.data.uid);
 
-        if (targetCategory === 'knowledge') {
+        if (isMacroRoot) {
+          // L1 全量层：第 1 次定焦整个分类扇区，后续连按在第 0~9 章分组间逐章巡航
+          if (targetCategory === 'knowledge') {
+            cycleSteps.push({
+              stepIndex: 0,
+              label: 'macro_knowledge_all',
+              targetRootUids: [branchUid],
+              verticalAnchor: 'center',
+              horizontalAnchor: 'right',
+              minReadableScale: 0,
+              maxScale: 1.0,
+              allowHorizontalOverflow: false
+            });
+            directChildren.forEach((chNode, idx) => {
+              cycleSteps.push({
+                stepIndex: idx + 1,
+                label: chNode.data.uid,
+                chapterId: chNode.data.sourceChapterId || chNode.data.targetChapterId || '',
+                targetRootUids: [chNode.data.uid],
+                verticalAnchor: 'top',
+                horizontalAnchor: 'right',
+                minReadableScale: 0.86,
+                maxScale: 1.05,
+                allowHorizontalOverflow: true
+              });
+            });
+          } else if (targetCategory === 'exam') {
+            cycleSteps.push({
+              stepIndex: 0,
+              label: 'macro_exam_all',
+              targetRootUids: [branchUid],
+              verticalAnchor: 'top',
+              horizontalAnchor: 'center',
+              minReadableScale: 0,
+              maxScale: 1.0,
+              allowHorizontalOverflow: false
+            });
+            directChildren.forEach((chNode, idx) => {
+              cycleSteps.push({
+                stepIndex: idx + 1,
+                label: chNode.data.uid,
+                chapterId: chNode.data.sourceChapterId || chNode.data.targetChapterId || '',
+                targetRootUids: [chNode.data.uid],
+                verticalAnchor: 'top',
+                horizontalAnchor: 'center',
+                minReadableScale: 0.90,
+                maxScale: 1.06
+              });
+            });
+          } else if (targetCategory === 'method') {
+            cycleSteps.push({
+              stepIndex: 0,
+              label: 'macro_method_all',
+              targetRootUids: [branchUid],
+              verticalAnchor: 'top',
+              horizontalAnchor: 'left',
+              minReadableScale: 0,
+              maxScale: 1.0,
+              allowHorizontalOverflow: false
+            });
+            directChildren.forEach((chNode, idx) => {
+              cycleSteps.push({
+                stepIndex: idx + 1,
+                label: chNode.data.uid,
+                chapterId: chNode.data.sourceChapterId || chNode.data.targetChapterId || '',
+                targetRootUids: [chNode.data.uid],
+                verticalAnchor: 'top',
+                horizontalAnchor: 'left',
+                minReadableScale: 0.88,
+                maxScale: 1.06,
+                allowHorizontalOverflow: true
+              });
+            });
+          }
+        } else if (targetCategory === 'knowledge') {
           cycleSteps.push({
             stepIndex: 0,
             label: 'knowledge_all',
             targetRootUids: [branchUid],
-            verticalAnchor: 'top',
-            horizontalAnchor: 'right',
-            minReadableScale: 0.84,
-            maxScale: 1.02
+            verticalAnchor: 'center',
+            horizontalAnchor: 'center',
+            minReadableScale: 0,
+            maxScale: 1.0,
+            allowHorizontalOverflow: false
           });
           directChildUids.forEach((secUid, idx) => {
             cycleSteps.push({
@@ -670,7 +891,8 @@
               verticalAnchor: 'top',
               horizontalAnchor: 'right',
               minReadableScale: 0.90,
-              maxScale: 1.05
+              maxScale: 1.05,
+              allowHorizontalOverflow: true
             });
           });
         } else if (targetCategory === 'exam') {
@@ -756,21 +978,29 @@
       };
 
       if (treeModified) {
-        this.mindMap.setData(treeData);
         this.mindMap.render();
 
         const outliner = this.options.outliner || window._outlinerInstance;
-        if (outliner && typeof outliner.setData === 'function') {
+        if (outliner && outliner.container && outliner.container.classList && outliner.container.classList.contains('active') && typeof outliner.setData === 'function') {
           outliner.setData(treeData);
-          if (typeof outliner.render === 'function') outliner.render();
+        }
+        if (global.CognitiveViewController && typeof global.CognitiveViewController.persistCurrentMindMapState === 'function') {
+          global.CognitiveViewController.persistCurrentMindMapState();
         }
       }
 
       if (typeof this.options.onCategoryFocus === 'function') {
         this.options.onCategoryFocus(targetCategory, activeStep, this.categoryCycleState, treeModified);
       } else if (typeof this.options.onLevelChange === 'function') {
-        this.options.onLevelChange(99);
+        this.options.onLevelChange(99, treeModified);
       }
+    }
+
+    resetCycleState() {
+      this.categoryCycleState = {
+        category: null,
+        stepIndex: 0
+      };
     }
 
     // 全部折叠 / 展开
@@ -797,6 +1027,9 @@
     // 全部展开 (~/· 键 或 0 键：全图鸟瞰缩略展开)
     expandAll() {
       this.categoryCycleState = { category: null, stepIndex: 0 };
+      if (global.CognitiveViewController && typeof global.CognitiveViewController.isClusterActive === 'function' && global.CognitiveViewController.isClusterActive()) {
+        global.CognitiveViewController.exitClusterMode({ restoreOnly: true });
+      }
       if (typeof this.mindMap.execCommand === 'function') {
         this.mindMap.execCommand('EXPAND_ALL');
       }
@@ -805,13 +1038,16 @@
         outliner.expandAll();
       }
       if (typeof this.options.onLevelChange === 'function') {
-        this.options.onLevelChange(0);
+        this.options.onLevelChange(0, true);
       }
     }
 
     // 全部折叠
     collapseAll() {
       this.categoryCycleState = { category: null, stepIndex: 0 };
+      if (global.CognitiveViewController && typeof global.CognitiveViewController.isClusterActive === 'function' && global.CognitiveViewController.isClusterActive()) {
+        global.CognitiveViewController.exitClusterMode({ restoreOnly: true });
+      }
       if (typeof this.mindMap.execCommand === 'function') {
         this.mindMap.execCommand('UNEXPAND_ALL');
       }
@@ -820,7 +1056,7 @@
         outliner.collapseAll();
       }
       if (typeof this.options.onLevelChange === 'function') {
-        this.options.onLevelChange(1);
+        this.options.onLevelChange(1, true);
       }
     }
   }

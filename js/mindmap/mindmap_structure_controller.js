@@ -113,11 +113,29 @@
             <div class="locate-tooltip">定位到中心节点</div>
           </div>
         </div>
+
+        <!-- 左下角章节与层级切换胶囊 (A/D 切章 · S 全量/章节切换) -->
+        <div class="mm-layer-status-capsule" id="mmLayerStatusCapsule">
+          <button type="button" class="mm-capsule-nav-btn" id="btnDockPrevChapter" title="上一章 (A)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+          <span class="mm-capsule-chapter-label" id="dockChapterLabel" title="当前章节 / 定焦章节 (A/D 切换)">第1章 函数、极限、连续</span>
+          <button type="button" class="mm-capsule-nav-btn" id="btnDockNextChapter" title="下一章 (D)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </button>
+          <span class="mm-capsule-divider"></span>
+          <button type="button" class="mm-capsule-layer-btn" id="btnDockToggleLayer" title="切换全量层 / 章节层 (S)">全量层 (S)</button>
+        </div>
       `;
       this.mountContainer.appendChild(dockWrapper);
       this.dockWrapper = dockWrapper;
       this.dockEl = dockWrapper.querySelector('#mmBottomDock');
       this.zoomSliderBar = dockWrapper.querySelector('#mmZoomSliderBar');
+      this.layerStatusCapsule = dockWrapper.querySelector('#mmLayerStatusCapsule');
 
       // 2. 结构与分支线全量平铺卡片
       const popoverEl = document.createElement('div');
@@ -367,6 +385,68 @@
           this.updateZoomDisplay();
         });
       }
+
+      // 11. 左下角章节与层级切换胶囊事件绑定 (A/D 切章 · S 全量/章节切换)
+      const btnPrevChapter = this.dockWrapper.querySelector('#btnDockPrevChapter');
+      if (btnPrevChapter) {
+        btnPrevChapter.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (global.CognitiveViewController && typeof global.CognitiveViewController.navigateChapter === 'function') {
+            global.CognitiveViewController.navigateChapter(-1);
+          }
+        });
+      }
+
+      const btnNextChapter = this.dockWrapper.querySelector('#btnDockNextChapter');
+      if (btnNextChapter) {
+        btnNextChapter.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (global.CognitiveViewController && typeof global.CognitiveViewController.navigateChapter === 'function') {
+            global.CognitiveViewController.navigateChapter(1);
+          }
+        });
+      }
+
+      const btnToggleLayer = this.dockWrapper.querySelector('#btnDockToggleLayer');
+      if (btnToggleLayer) {
+        btnToggleLayer.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (global.CognitiveViewController && typeof global.CognitiveViewController.toggleLayerMode === 'function') {
+            global.CognitiveViewController.toggleLayerMode();
+          }
+        });
+      }
+    }
+
+    updateLayerStatus(statusInfo = {}) {
+      if (!this.dockWrapper) return;
+      const capsule = this.dockWrapper.querySelector('#mmLayerStatusCapsule');
+      const labelEl = this.dockWrapper.querySelector('#dockChapterLabel');
+      const toggleBtn = this.dockWrapper.querySelector('#btnDockToggleLayer');
+      const prevBtn = this.dockWrapper.querySelector('#btnDockPrevChapter');
+      const nextBtn = this.dockWrapper.querySelector('#btnDockNextChapter');
+      if (!capsule) return;
+
+      if (statusInfo.hidden) {
+        capsule.style.display = 'none';
+        return;
+      }
+      capsule.style.display = 'flex';
+
+      const isMacro = statusInfo.layerMode === 'subject_macro';
+      capsule.classList.toggle('is-macro-mode', isMacro);
+
+      if (labelEl && statusInfo.labelText) {
+        labelEl.textContent = statusInfo.labelText;
+      }
+      if (toggleBtn) {
+        toggleBtn.textContent = isMacro ? '进章节 (S)' : '全量层 (S)';
+        toggleBtn.classList.toggle('active', isMacro);
+        toggleBtn.classList.toggle('is-macro-active', isMacro);
+      }
+      const navDisabled = Boolean(statusInfo.disableChapterNav);
+      if (prevBtn) prevBtn.style.display = navDisabled ? 'none' : '';
+      if (nextBtn) nextBtn.style.display = navDisabled ? 'none' : '';
     }
 
     togglePopover() {

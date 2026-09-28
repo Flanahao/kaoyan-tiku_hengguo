@@ -42,15 +42,25 @@
     rightDownPos: null
   };
 
-  // 章节导图注册表与两层架构状态管理 (L1 学科骨架层 / L2 章节全量层)
+  // 章节导图注册表与两层架构状态管理 (L1 学科全量层 / L2 章节全量层)
   var chapterRegistry = new Map();
   var currentChapterId = 'math_ch1';
+  var lastVisitedChapterId = 'math_ch1';
+  var macroFocusedChapterId = 'math_ch1';
+  var lastHostChapterId = '';
   var currentLayerMode = 'chapter'; // 'chapter' | 'subject_macro'
   var saveDebounceTimer = null;
+  var stateSaveDebounceTimer = null;
+  var MATH_CHAPTER_ORDER = [
+    'math_ch0', 'math_ch1', 'math_ch2', 'math_ch3', 'math_ch4',
+    'math_ch5', 'math_ch6', 'math_ch7', 'math_ch8', 'math_ch9'
+  ];
 
   // 深拷贝纯净节点树（剥离 SimpleMindMap 内部 _node 循环引用与临时标记）
-  function cloneCleanTree(node) {
+  function cloneCleanTree(node, options) {
     if (!node) return null;
+    var opts = options || {};
+    var stripMacro = Boolean(opts.stripMacroMeta);
     var cleanData = {};
     var srcData = (node._node && node._node.nodeData && node._node.nodeData.data) ? node._node.nodeData.data : node.data;
     if (srcData && typeof srcData === 'object') {
@@ -58,6 +68,17 @@
       for (var i = 0; i < keys.length; i++) {
         var k = keys[i];
         if (k === '_node' || k === '_mmLastSig' || k === '_expandModified' || k === '_isClusterPruned') continue;
+        if (stripMacro && (
+          k === 'isSubjectMacroRoot' ||
+          k === 'isMacroChapterGroup' ||
+          k === 'isCatalogLeaf' ||
+          k === 'isChapterPortal' ||
+          k === 'sourceChapterId' ||
+          k === 'sourceNodeUid' ||
+          k === 'targetChapterId' ||
+          k === 'targetNodeUid' ||
+          k === 'hiddenChildCount'
+        )) continue;
         var val = srcData[k];
         if (Array.isArray(val)) {
           cleanData[k] = val.slice();
@@ -71,7 +92,7 @@
     var cleanChildren = [];
     if (Array.isArray(node.children)) {
       for (var j = 0; j < node.children.length; j++) {
-        var ch = cloneCleanTree(node.children[j]);
+        var ch = cloneCleanTree(node.children[j], opts);
         if (ch) cleanChildren.push(ch);
       }
     }
@@ -79,6 +100,125 @@
       data: cleanData,
       children: cleanChildren
     };
+  }
+
+  // 读取 kaoyan.g.cognitive_state 记忆状态
+  function readCognitiveState() {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        var raw = localStorage.getItem('kaoyan.g.cognitive_state');
+        if (raw) {
+          var parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') return parsed;
+        }
+      }
+      if (typeof window !== 'undefined' && window.StorageEngine && window.StorageEngine.GlobalStore) {
+        var gsVal = window.StorageEngine.GlobalStore.get('cognitive_state');
+        if (gsVal && typeof gsVal === 'object') return gsVal;
+      }
+    } catch (e) {}
+    return {};
+  }
+
+  function getCurrentViewportKey() {
+    if (currentLayerMode === 'subject_macro') {
+      return 'subject_macro:' + (currentActiveSubject || 'math');
+    }
+    return 'chapter:' + (currentChapterId || 'math_ch1');
+  }
+
+  // 保存 kaoyan.g.cognitive_state（支持跨页面刷新恢复 O 键状态、层级模式、章节、大纲/导图模式与相机视口）
+  function saveCognitiveState(overrideFields) {
+    try {
+      var prev = readCognitiveState();
+      var viewports = Object.assign({}, prev.viewports || {});
+      if (mindMapInstance && mindMapInstance.view &&
+          typeof mindMapInstance.view.scale === 'number' && !isNaN(mindMapInstance.view.scale) &&
+          typeof mindMapInstance.view.x === 'number' && !isNaN(mindMapInstance.view.x) &&
+          typeof mindMapInstance.view.y === 'number' && !isNaN(mindMapInstance.view.y)) {
+        viewports[getCurrentViewportKey()] = {
+          scale: Number(mindMapInstance.view.scale.toFixed(4)),
+          x: Math.round(mindMapInstance.view.x),
+          y: Math.round(mindMapInstance.view.y)
+        };
+      }
+
+      var curViewMode = (dualViewController && typeof dualViewController.getCurrentView === 'function')
+        ? dualViewController.getCurrentView()
+        : (prev.viewMode || 'mindmap');
+
+      var nextState = Object.assign({}, prev, {
+        isOpen: Boolean(isModalOpen),
+        subject: currentActiveSubject || 'math',
+        layerMode: currentLayerMode || 'chapter',
+        currentChapterId: currentChapterId || 'math_ch1',
+        lastVisitedChapterId: lastVisitedChapterId || currentChapterId || 'math_ch1',
+        macroFocusedChapterId: macroFocusedChapterId || currentChapterId || 'math_ch1',
+        lastHostChapterId: lastHostChapterId || prev.lastHostChapterId || '',
+        viewMode: curViewMode,
+        isAssociativeLineVisible: Boolean(isAssociativeLineVisible),
+        viewports: viewports,
+        updatedAt: Date.now()
+      }, overrideFields || {});
+
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('kaoyan.g.cognitive_state', JSON.stringify(nextState));
+      }
+      if (typeof window !== 'undefined' && window.StorageEngine && window.StorageEngine.GlobalStore) {
+        window.StorageEngine.GlobalStore.set('cognitive_state', nextState);
+      }
+    } catch (e) {
+      console.warn('[CognitiveViewController] 保存 cognitive_state 失败:', e);
+    }
+  }
+
+  function scheduleSaveCognitiveState() {
+    if (stateSaveDebounceTimer) {
+      clearTimeout(stateSaveDebounceTimer);
+      stateSaveDebounceTimer = null;
+    }
+    stateSaveDebounceTimer = setTimeout(function () {
+      stateSaveDebounceTimer = null;
+      saveCognitiveState();
+    }, 120);
+  }
+
+  function getChapterDisplayTitle(cid) {
+    ensureBuiltInChaptersRegistered();
+    var targetCid = cid || currentChapterId || 'math_ch1';
+    if (chapterRegistry.has(targetCid)) {
+      var chObj = chapterRegistry.get(targetCid);
+      if (chObj && chObj.data && chObj.data.text) {
+        return chObj.data.text;
+      }
+    }
+    return targetCid;
+  }
+
+  function updateBottomCapsuleUI() {
+    if (!structureController || typeof structureController.updateLayerStatus !== 'function') return;
+    var isEnglish = (currentActiveSubject === 'english' || window.curSubjectId === 'english' || (window.curSubject && window.curSubject.type === 'english'));
+    if (isEnglish) {
+      structureController.updateLayerStatus({ hidden: true });
+      return;
+    }
+    if (currentLayerMode === 'subject_macro') {
+      var focusCid = macroFocusedChapterId || currentChapterId || 'math_ch1';
+      var chTitle = getChapterDisplayTitle(focusCid);
+      structureController.updateLayerStatus({
+        hidden: false,
+        layerMode: 'subject_macro',
+        labelText: '全量层 · ' + chTitle,
+        disableChapterNav: false
+      });
+    } else {
+      structureController.updateLayerStatus({
+        hidden: false,
+        layerMode: 'chapter',
+        labelText: getChapterDisplayTitle(currentChapterId),
+        disableChapterNav: false
+      });
+    }
   }
 
   // 将聚拢剪枝态下用户对节点的文本修改、高亮、样式、Shift+空格转正同步回完整章节树备份
@@ -137,7 +277,7 @@
     chapterRegistry.set(chapterId, data);
   }
 
-  // 确保全部内置章节导图（高数第0~9章与英语翻译导图）均已注册（保持 math_ch1 首位于注册表以兼容学科宏观树基准测试）
+  // 确保全部内置章节导图（高数第0~9章与英语翻译导图）均已注册
   function ensureBuiltInChaptersRegistered() {
     if (window.Chapter1MindMapData && !chapterRegistry.has('math_ch1')) {
       registerChapterMindMap('math_ch1', window.Chapter1MindMapData);
@@ -274,19 +414,22 @@
     });
     if (!hasHybridBranches) return rootNode;
 
+    var isMacroRoot = Boolean(rootNode.data && rootNode.data.isSubjectMacroRoot);
     var modified = false;
     function walk(node, depth, branchType) {
       if (!node) return;
       if (!node.data) node.data = {};
       var uid = node.data.uid || '';
       var curBranch = branchType;
-      if (uid === 'branch_knowledge' || uid.indexOf('sec_') === 0) curBranch = 'knowledge';
-      else if (uid === 'branch_exam_points' || uid.indexOf('kp_') === 0) curBranch = 'exam';
-      else if (uid === 'branch_methods' || uid.indexOf('m_') === 0) curBranch = 'method';
+      if (uid === 'branch_knowledge' || uid.indexOf('sec_') === 0 || uid.indexOf('macro_know_') === 0) curBranch = 'knowledge';
+      else if (uid === 'branch_exam_points' || uid.indexOf('kp_') === 0 || uid.indexOf('macro_exam_') === 0) curBranch = 'exam';
+      else if (uid === 'branch_methods' || uid.indexOf('m_') === 0 || uid.indexOf('macro_method_') === 0) curBranch = 'method';
 
       var nextExpand = false;
       if (depth === 0 || depth === 1) {
         nextExpand = true;
+      } else if (isMacroRoot) {
+        nextExpand = (depth === 2);
       } else if (curBranch === 'knowledge' || curBranch === 'exam') {
         nextExpand = (depth === 2);
       } else {
@@ -313,6 +456,158 @@
     return rootNode;
   }
 
+  // 在 L1 全量层对节点的修改、样式、待确认转正及新增子节点，双向写穿同步回对应章节 (kaoyan.g.mindmap_chapters.math_chX)
+  function syncMacroTreeChangesToChapters(macroTree) {
+    if (!macroTree) return;
+    var mutableKeys = [
+      'text', 'tag', 'tagType', 'formalTag', 'formalTagType', 'pendingSource',
+      'highlightColor', 'fontWeight', 'fontStyle', 'textDecoration',
+      'note', 'customTextWidth', 'richText', 'associativeLineTargets', 'resonanceLinks'
+    ];
+
+    // 1. 提取 L1 全量层自身的展开状态表并持久化到 kaoyan.g.mindmap_subject.<subject>
+    var expandMap = {};
+    var editsByChapter = new Map();
+    var newNodesByChapter = new Map();
+
+    function walkMacro(node, parentNode, inheritedChapterId) {
+      if (!node) return;
+      var d = (node._node && node._node.nodeData && node._node.nodeData.data) ? node._node.nodeData.data : (node.data || {});
+      var uid = d.uid || '';
+      if (uid) {
+        expandMap[uid] = (d.expand !== false);
+      }
+
+      var cid = d.sourceChapterId || d.targetChapterId || inheritedChapterId || '';
+      if (cid && uid && !d.isSubjectMacroRoot) {
+        if (!editsByChapter.has(cid)) {
+          editsByChapter.set(cid, new Map());
+        }
+        var targetUid = d.isMacroChapterGroup ? '' : (d.sourceNodeUid || uid);
+        if (targetUid) {
+          editsByChapter.get(cid).set(targetUid, d);
+        }
+        // 检查是否在全量层新增了尚未标记 sourceNodeUid 的子节点
+        if (!d.isMacroChapterGroup && !d.sourceNodeUid && parentNode) {
+          var pd = (parentNode._node && parentNode._node.nodeData && parentNode._node.nodeData.data)
+            ? parentNode._node.nodeData.data
+            : (parentNode.data || {});
+          var parentTargetUid = pd.sourceNodeUid || pd.uid || '';
+          if (parentTargetUid) {
+            d.sourceChapterId = cid;
+            d.sourceNodeUid = uid;
+            if (!newNodesByChapter.has(cid)) {
+              newNodesByChapter.set(cid, []);
+            }
+            newNodesByChapter.get(cid).push({
+              parentUid: parentTargetUid,
+              nodeUid: uid,
+              cleanSubtree: cloneCleanTree(node, { stripMacroMeta: true })
+            });
+          }
+        }
+      }
+
+      if (Array.isArray(node.children)) {
+        for (var i = 0; i < node.children.length; i++) {
+          walkMacro(node.children[i], node, cid);
+        }
+      }
+    }
+
+    walkMacro(macroTree, null, '');
+
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('kaoyan.g.mindmap_subject.' + (currentActiveSubject || 'math'), JSON.stringify({
+          expandMap: expandMap,
+          updatedAt: Date.now()
+        }));
+      }
+    } catch (e) {}
+
+    // 2. 遍历涉及的章节，对比并写穿保存修改
+    editsByChapter.forEach(function (nodeEditMap, cid) {
+      var chTree = getInitialChapterData(cid, { preserveExpandState: true });
+      if (!chTree) return;
+      var chapterModified = false;
+      var existingUids = new Set();
+
+      function collectExistingUids(n) {
+        if (!n) return;
+        if (n.data && n.data.uid) existingUids.add(n.data.uid);
+        if (Array.isArray(n.children)) {
+          for (var i = 0; i < n.children.length; i++) collectExistingUids(n.children[i]);
+        }
+      }
+      collectExistingUids(chTree);
+
+      function applyEditsToChapterNode(n) {
+        if (!n) return;
+        if (n.data && n.data.uid && nodeEditMap.has(n.data.uid)) {
+          var mData = nodeEditMap.get(n.data.uid);
+          for (var k = 0; k < mutableKeys.length; k++) {
+            var key = mutableKeys[k];
+            var hasNew = Object.prototype.hasOwnProperty.call(mData, key) && mData[key] !== undefined;
+            var hasOld = Object.prototype.hasOwnProperty.call(n.data, key) && n.data[key] !== undefined;
+            if (hasNew) {
+              var newStr = JSON.stringify(mData[key]);
+              var oldStr = hasOld ? JSON.stringify(n.data[key]) : '';
+              if (newStr !== oldStr) {
+                n.data[key] = Array.isArray(mData[key]) ? mData[key].slice() : mData[key];
+                chapterModified = true;
+              }
+            } else if (hasOld) {
+              delete n.data[key];
+              chapterModified = true;
+            }
+          }
+        }
+        if (Array.isArray(n.children)) {
+          for (var i = 0; i < n.children.length; i++) {
+            applyEditsToChapterNode(n.children[i]);
+          }
+        }
+      }
+      applyEditsToChapterNode(chTree);
+
+      // 插入在全量层新增的子节点
+      var pendingAdditions = newNodesByChapter.get(cid) || [];
+      pendingAdditions.forEach(function (item) {
+        if (!item || !item.nodeUid || existingUids.has(item.nodeUid)) return;
+        function insertUnderParent(n) {
+          if (!n) return false;
+          if (n.data && n.data.uid === item.parentUid) {
+            if (!Array.isArray(n.children)) n.children = [];
+            n.children.push(item.cleanSubtree);
+            existingUids.add(item.nodeUid);
+            chapterModified = true;
+            return true;
+          }
+          if (Array.isArray(n.children)) {
+            for (var i = 0; i < n.children.length; i++) {
+              if (insertUnderParent(n.children[i])) return true;
+            }
+          }
+          return false;
+        }
+        insertUnderParent(chTree);
+      });
+
+      if (chapterModified) {
+        if (window.SyncBlockManager && typeof window.SyncBlockManager.extractAndSaveSyncBlocks === 'function') {
+          window.SyncBlockManager.extractAndSaveSyncBlocks(chTree);
+        }
+        try {
+          if (typeof localStorage !== 'undefined') {
+            var cleanCh = cloneCleanTree(chTree, { stripMacroMeta: true });
+            localStorage.setItem('kaoyan.g.mindmap_chapters.' + cid, JSON.stringify(cleanCh));
+          }
+        } catch (e) {}
+      }
+    });
+  }
+
   function flushMindMapStateToStorage() {
     if (!mindMapInstance) return;
     var curTree = (mindMapInstance.renderer && mindMapInstance.renderer.renderTree) || mindMapInstance.getData(false);
@@ -326,6 +621,19 @@
       return;
     }
 
+    // L1 全量层：执行双向写穿同步至对应章节，并保存全量层展开状态与全局认知状态
+    if (currentLayerMode === 'subject_macro' || (treeToPersist.data && treeToPersist.data.isSubjectMacroRoot)) {
+      if (window.SyncBlockManager && typeof window.SyncBlockManager.extractAndSaveSyncBlocks === 'function') {
+        window.SyncBlockManager.extractAndSaveSyncBlocks(treeToPersist);
+      }
+      syncMacroTreeChangesToChapters(treeToPersist);
+      saveCognitiveState();
+      if (typeof window.notifyStorageSync === 'function') {
+        window.notifyStorageSync();
+      }
+      return;
+    }
+
     // 1. 若存在跨章同步块，写穿提取并更新 SyncBlockManager
     if (window.SyncBlockManager && typeof window.SyncBlockManager.extractAndSaveSyncBlocks === 'function') {
       window.SyncBlockManager.extractAndSaveSyncBlocks(treeToPersist);
@@ -334,11 +642,12 @@
     // 2. 章节全量状态静默写入 localStorage
     try {
       if (typeof localStorage !== 'undefined' && currentChapterId) {
-        var cleanTree = cloneCleanTree(treeToPersist);
+        var cleanTree = cloneCleanTree(treeToPersist, { stripMacroMeta: true });
         if (cleanTree && cleanTree.data) {
           delete cleanTree.data._isClusterPruned;
         }
         localStorage.setItem('kaoyan.g.mindmap_chapters.' + currentChapterId, JSON.stringify(cleanTree));
+        saveCognitiveState();
         if (typeof window.notifyStorageSync === 'function') {
           window.notifyStorageSync();
         }
@@ -365,7 +674,8 @@
   }
 
   // 获取章节初始数据（优先从 localStorage 读取用户修改，若无则从注册表抓取，并调用 SyncBlockManager 注入同步块子树）
-  function getInitialChapterData(chapterId) {
+  function getInitialChapterData(chapterId, options) {
+    var opts = options || {};
     var isEnglish = (currentActiveSubject === 'english' || window.curSubjectId === 'english' || (window.curSubject && window.curSubject.type === 'english'));
     var cid = resolveChapterId(chapterId || currentChapterId, isEnglish);
 
@@ -380,7 +690,7 @@
     if (rawSaved) {
       try {
         var parsed = JSON.parse(rawSaved);
-        if (parsed && (!parsed.data || !parsed.data._isClusterPruned)) {
+        if (parsed && (!parsed.data || (!parsed.data._isClusterPruned && !parsed.data.isSubjectMacroRoot))) {
           baseData = parsed;
         }
       } catch (e) {
@@ -405,9 +715,31 @@
       baseData = window.SyncBlockManager.hydrateTree(baseData);
     }
 
-    normalizeOverviewExpandState(baseData);
-    delete baseData._expandModified;
+    if (!opts.preserveExpandState) {
+      normalizeOverviewExpandState(baseData);
+      delete baseData._expandModified;
+    }
     return baseData;
+  }
+
+  // 在章节内展开祖先并选中/高亮目标节点
+  function focusAndSelectNodeInChapter(targetUid) {
+    if (!mindMapInstance || !targetUid) return;
+    var targets = getTargetsByUid(targetUid);
+    if (Array.isArray(targets) && targets.length > 0) {
+      applyFocusResonanceByUid(targetUid);
+      return;
+    }
+    ensureNodesExpanded([targetUid], function () {
+      if (mindMapInstance.renderer && typeof mindMapInstance.renderer.findNodeByUid === 'function') {
+        var foundNode = mindMapInstance.renderer.findNodeByUid(targetUid);
+        if (foundNode) {
+          mindMapInstance.renderer.clearActiveNodeList();
+          mindMapInstance.renderer.addNodeToActiveList(foundNode);
+        }
+      }
+      scheduleFitView(48, { minReadableScale: 0, maxScale: 1.0, verticalAnchor: 'center', horizontalAnchor: 'center', allowHorizontalOverflow: false });
+    });
   }
 
   // 加载指定章节进入 L2 章节全量层
@@ -417,16 +749,26 @@
       clearTimeout(saveDebounceTimer);
       saveDebounceTimer = null;
       flushMindMapStateToStorage();
+    } else if (mindMapInstance && isModalOpen && !opts.skipFlushBeforeLoad) {
+      flushMindMapStateToStorage();
     }
     if (clusterState.active) {
       exitClusterMode({ restoreOnly: true });
     }
+    if (shortcutManager && typeof shortcutManager.resetCycleState === 'function') {
+      shortcutManager.resetCycleState();
+    }
     var isEnglish = (currentActiveSubject === 'english' || window.curSubjectId === 'english' || (window.curSubject && window.curSubject.type === 'english'));
     currentChapterId = resolveChapterId(chapterId, isEnglish);
+    lastVisitedChapterId = currentChapterId;
+    macroFocusedChapterId = currentChapterId;
     currentLayerMode = 'chapter';
 
-    var data = getInitialChapterData(currentChapterId);
+    var data = getInitialChapterData(currentChapterId, {
+      preserveExpandState: Boolean(opts.preserveExpandState)
+    });
     applySemanticClustering(data);
+    updateBottomCapsuleUI();
 
     if (mindMapInstance) {
       clearCachedTreeLines();
@@ -447,74 +789,475 @@
         if (container && container.offsetWidth > 0 && container.offsetHeight > 0) {
           mindMapInstance.resize();
         }
-        if (opts.focusNodeUid) {
-          applyFocusResonanceByUid(opts.focusNodeUid);
+        if (opts.restoreViewport && typeof opts.restoreViewport.scale === 'number') {
+          var rv = opts.restoreViewport;
+          scheduleViewportAction(function () {
+            if (!mindMapInstance || !mindMapInstance.view) return false;
+            mindMapInstance.view.scale = rv.scale;
+            mindMapInstance.view.x = rv.x;
+            mindMapInstance.view.y = rv.y;
+            if (typeof mindMapInstance.view.transform === 'function') mindMapInstance.view.transform();
+            if (structureController) structureController.updateZoomDisplay();
+            syncAssociativeLinesState();
+            return true;
+          }, true);
+        } else if (opts.focusNodeUid) {
+          focusAndSelectNodeInChapter(opts.focusNodeUid);
         } else {
           scheduleFitView(48, { minReadableScale: 0, maxScale: 1.0, verticalAnchor: 'center', horizontalAnchor: 'center', allowHorizontalOverflow: false });
         }
+        saveCognitiveState();
       }, 30);
+    } else {
+      saveCognitiveState();
     }
   }
 
-  // 构建学科级宏观骨架投影树 (L1 Subject Macro Tree，预留接口)
-  function buildSubjectMacroTree(subjectId, maxMacroLevel) {
+  // 构建学科级全量层同构正品字 △ 树 (L1 Subject Macro Tree：上方考点 · 左下知识点 · 右下解法，内部按第0~9章分组并裁剪至 1.1/考点/解法标题)
+  function buildSubjectMacroTree(subjectId, maxMacroLevel, options) {
+    var opts = options || {};
     var maxLvl = typeof maxMacroLevel === 'number' ? maxMacroLevel : 3;
     var subId = subjectId || 'math';
     var isMath = (subId === 'math');
 
-    var macroRoot = {
+    ensureBuiltInChaptersRegistered();
+
+    if (!isMath) {
+      var fallbackRoot = {
+        data: {
+          text: '学科导图',
+          uid: 'root_subject_' + subId,
+          isSubjectMacroRoot: true,
+          subjectId: subId,
+          macroLevel: 0,
+          expand: true
+        },
+        children: []
+      };
+      chapterRegistry.forEach(function (chData, cid) {
+        if (subId === 'english' && cid.indexOf('english_') !== 0) return;
+        var raw = getInitialChapterData(cid, { preserveExpandState: true });
+        if (raw) fallbackRoot.children.push(raw);
+      });
+      return fallbackRoot;
+    }
+
+    var examSector = {
       data: {
-        text: isMath ? '高等数学' : '学科导图',
-        uid: 'root_subject_' + subId,
-        macroLevel: 0,
+        text: '考点',
+        uid: 'branch_exam_points',
+        role: 'branch',
+        category: 'exam',
+        dir: 'right',
+        macroLevel: 1,
+        expand: true
+      },
+      children: []
+    };
+    var methodSector = {
+      data: {
+        text: '解法',
+        uid: 'branch_methods',
+        role: 'branch',
+        category: 'method',
+        dir: 'right',
+        macroLevel: 1,
+        expand: true
+      },
+      children: []
+    };
+    var knowSector = {
+      data: {
+        text: '知识点',
+        uid: 'branch_knowledge',
+        role: 'branch',
+        category: 'knowledge',
+        dir: 'left',
+        macroLevel: 1,
         expand: true
       },
       children: []
     };
 
-    ensureBuiltInChaptersRegistered();
-
-    chapterRegistry.forEach(function (chData, cid) {
-      if (!chData) return;
-      if (isMath && cid.indexOf('math_') !== 0) return;
-      if (subId === 'english' && cid.indexOf('english_') !== 0) return;
-      var rawCh = getInitialChapterData(cid);
-      if (!rawCh) return;
-
-      function clonePruned(node, currentLevel) {
-        if (!node) return null;
-        var nodeData = (node.data ? JSON.parse(JSON.stringify(node.data)) : {});
-        var lvl = typeof nodeData.macroLevel === 'number' ? nodeData.macroLevel : currentLevel;
-        nodeData.macroLevel = lvl;
-
-        var isLeaf = (lvl >= maxLvl);
-        var pruned = {
-          data: nodeData,
-          children: []
-        };
-
-        if (isLeaf) {
-          pruned.data.isChapterPortal = true;
-          pruned.data.targetChapterId = cid;
-          pruned.data.targetNodeUid = nodeData.uid || '';
-          if (Array.isArray(node.children) && node.children.length > 0) {
-            pruned.data.hiddenChildCount = node.children.length;
-          }
-        } else if (Array.isArray(node.children)) {
-          pruned.children = node.children.map(function (c) {
-            return clonePruned(c, lvl + 1);
-          }).filter(Boolean);
-        }
-        return pruned;
-      }
-
-      var prunedChapter = clonePruned(rawCh, 0);
-      if (prunedChapter) {
-        macroRoot.children.push(prunedChapter);
+    var orderedChapterIds = MATH_CHAPTER_ORDER.slice();
+    chapterRegistry.forEach(function (_, cid) {
+      if (cid.indexOf('math_') === 0 && orderedChapterIds.indexOf(cid) === -1) {
+        orderedChapterIds.push(cid);
       }
     });
 
+    function cloneMacroSubtree(node, cid, currentLevel, extraData) {
+      if (!node) return null;
+      var nodeData = (node.data ? JSON.parse(JSON.stringify(node.data)) : {});
+      if (extraData) {
+        Object.assign(nodeData, extraData);
+      }
+      var lvl = typeof nodeData.macroLevel === 'number' ? nodeData.macroLevel : currentLevel;
+      nodeData.macroLevel = lvl;
+      nodeData.sourceChapterId = cid;
+      nodeData.sourceNodeUid = nodeData.uid || '';
+
+      var isLeaf = (lvl >= maxLvl);
+      var pruned = {
+        data: nodeData,
+        children: []
+      };
+
+      if (isLeaf) {
+        pruned.data.isChapterPortal = true;
+        pruned.data.targetChapterId = cid;
+        pruned.data.targetNodeUid = nodeData.uid || '';
+        pruned.data.expand = false;
+        if (Array.isArray(node.children) && node.children.length > 0) {
+          pruned.data.hiddenChildCount = node.children.length;
+        }
+      } else if (Array.isArray(node.children)) {
+        pruned.children = node.children.map(function (c) {
+          return cloneMacroSubtree(c, cid, lvl + 1, null);
+        }).filter(Boolean);
+      }
+      return pruned;
+    }
+
+    orderedChapterIds.forEach(function (cid) {
+      if (!chapterRegistry.has(cid)) return;
+      var rawCh = getInitialChapterData(cid, { preserveExpandState: true });
+      if (!rawCh || !Array.isArray(rawCh.children)) return;
+      var chTitle = (rawCh.data && rawCh.data.text) ? rawCh.data.text : cid;
+
+      var chExamBranch = null;
+      var chMethodBranch = null;
+      var chKnowBranch = null;
+      for (var i = 0; i < rawCh.children.length; i++) {
+        var b = rawCh.children[i];
+        var buid = (b && b.data && b.data.uid) || '';
+        if (buid === 'branch_exam_points') chExamBranch = b;
+        else if (buid === 'branch_methods') chMethodBranch = b;
+        else if (buid === 'branch_knowledge') chKnowBranch = b;
+      }
+
+      // 1. 考点扇区章节组 (向上堆叠本章各考点卡片)
+      var examChildren = [];
+      if (chExamBranch && Array.isArray(chExamBranch.children)) {
+        examChildren = chExamBranch.children.map(function (kpNode) {
+          // 考点标题卡片在全量层作为向上目录子项展示，截断其下的具体题源详情
+          return cloneMacroSubtree(kpNode, cid, maxLvl, {
+            isCatalogLeaf: true,
+            macroLevel: maxLvl
+          });
+        }).filter(Boolean);
+      }
+      examSector.children.push({
+        data: {
+          text: chTitle,
+          uid: 'macro_exam_' + cid,
+          role: 'section',
+          tag: '章节',
+          tagType: 'exam',
+          category: 'exam',
+          macroLevel: 2,
+          isMacroChapterGroup: true,
+          sourceChapterId: cid,
+          sourceNodeUid: 'branch_exam_points',
+          targetChapterId: cid,
+          targetNodeUid: 'branch_exam_points',
+          expand: true
+        },
+        children: examChildren
+      });
+
+      // 2. 解法扇区章节组 (向右展开本章各解法招法标题)
+      var methodChildren = [];
+      if (chMethodBranch && Array.isArray(chMethodBranch.children)) {
+        methodChildren = chMethodBranch.children.map(function (mNode) {
+          return cloneMacroSubtree(mNode, cid, maxLvl, {
+            macroLevel: maxLvl
+          });
+        }).filter(Boolean);
+      }
+      methodSector.children.push({
+        data: {
+          text: chTitle,
+          uid: 'macro_method_' + cid,
+          role: 'section',
+          tag: '章节',
+          tagType: 'method',
+          category: 'method',
+          dir: 'right',
+          macroLevel: 2,
+          isMacroChapterGroup: true,
+          sourceChapterId: cid,
+          sourceNodeUid: 'branch_methods',
+          targetChapterId: cid,
+          targetNodeUid: 'branch_methods',
+          expand: true
+        },
+        children: methodChildren
+      });
+
+      // 3. 知识点扇区章节组 (向左展开本章 §1~§4 分节及 1.1~4.2 小节标题)
+      var knowChildren = [];
+      if (chKnowBranch && Array.isArray(chKnowBranch.children)) {
+        knowChildren = chKnowBranch.children.map(function (secNode) {
+          var clonedSec = cloneMacroSubtree(secNode, cid, 2, null);
+          if (clonedSec && clonedSec.data) {
+            // 默认在全量层二级总览展开至 §1~§4，按 3 键或 Q 键或点击展开至 1.1~4.2
+            clonedSec.data.expand = (maxLvl > 3);
+            clonedSec.data.targetChapterId = cid;
+            clonedSec.data.targetNodeUid = clonedSec.data.uid || '';
+          }
+          return clonedSec;
+        }).filter(Boolean);
+      }
+      knowSector.children.push({
+        data: {
+          text: chTitle,
+          uid: 'macro_know_' + cid,
+          role: 'section',
+          tag: '章节',
+          tagType: 'section',
+          category: 'knowledge',
+          dir: 'left',
+          macroLevel: 2,
+          isMacroChapterGroup: true,
+          sourceChapterId: cid,
+          sourceNodeUid: 'branch_knowledge',
+          targetChapterId: cid,
+          targetNodeUid: 'branch_knowledge',
+          expand: true
+        },
+        children: knowChildren
+      });
+    });
+
+    var macroRoot = {
+      data: {
+        text: '高等数学',
+        uid: 'root_subject_' + subId,
+        isSubjectMacroRoot: true,
+        subjectId: subId,
+        macroLevel: 0,
+        expand: true
+      },
+      children: [examSector, methodSector, knowSector]
+    };
+
+    // 若请求恢复用户保存的全量层节点展开状态，则从 kaoyan.g.mindmap_subject.<subId> 合并恢复
+    if (opts.restoreSavedExpand && typeof localStorage !== 'undefined') {
+      try {
+        var rawSubjSaved = localStorage.getItem('kaoyan.g.mindmap_subject.' + subId);
+        if (rawSubjSaved) {
+          var parsedSubj = JSON.parse(rawSubjSaved);
+          var expMap = (parsedSubj && parsedSubj.expandMap) || null;
+          if (expMap && typeof expMap === 'object') {
+            (function applySavedExp(n) {
+              if (!n) return;
+              if (n.data && n.data.uid && Object.prototype.hasOwnProperty.call(expMap, n.data.uid)) {
+                n.data.expand = Boolean(expMap[n.data.uid]);
+              }
+              if (Array.isArray(n.children)) {
+                for (var i = 0; i < n.children.length; i++) applySavedExp(n.children[i]);
+              }
+            })(macroRoot);
+          }
+        }
+      } catch (e) {}
+    }
+
     return macroRoot;
+  }
+
+  // 解析在 L1 全量层按 S 键下钻时的目标章节与目标节点
+  function resolveMacroTargetChapterAndNode() {
+    var activeList = (mindMapInstance && mindMapInstance.renderer && mindMapInstance.renderer.activeNodeList) || [];
+    var activeNode = activeList.length > 0 ? activeList[0] : null;
+    if (activeNode) {
+      var cur = activeNode;
+      var targetCid = '';
+      var targetUid = '';
+      while (cur) {
+        var d = (typeof cur.getData === 'function' ? cur.getData() : (cur.nodeData && cur.nodeData.data)) || {};
+        var scid = d.sourceChapterId || d.targetChapterId || '';
+        if (scid && !targetCid) {
+          targetCid = scid;
+        }
+        if (!targetUid && !d.isMacroChapterGroup && !d.isSubjectMacroRoot && d.uid && d.uid.indexOf('branch_') !== 0) {
+          targetUid = d.sourceNodeUid || d.targetNodeUid || d.uid;
+        }
+        cur = cur.parent;
+      }
+      if (targetCid) {
+        return { chapterId: targetCid, nodeUid: targetUid };
+      }
+    }
+
+    if (outliner && outliner.focusedUid && mindMapInstance) {
+      var rTree = (mindMapInstance.renderer && mindMapInstance.renderer.renderTree) || mindMapInstance.getData(false);
+      var fData = findNodeDataByUid(rTree, outliner.focusedUid);
+      if (fData && (fData.sourceChapterId || fData.targetChapterId)) {
+        return {
+          chapterId: fData.sourceChapterId || fData.targetChapterId,
+          nodeUid: fData.isMacroChapterGroup ? '' : (fData.sourceNodeUid || fData.uid || '')
+        };
+      }
+    }
+
+    return {
+      chapterId: macroFocusedChapterId || lastVisitedChapterId || currentChapterId || 'math_ch1',
+      nodeUid: ''
+    };
+  }
+
+  // 切换进入 L1 全量层 (Subject Macro Layer)
+  function enterSubjectMacroLayer(options) {
+    var opts = options || {};
+    var isEnglish = (currentActiveSubject === 'english' || window.curSubjectId === 'english' || (window.curSubject && window.curSubject.type === 'english'));
+    if (isEnglish) return false;
+
+    if (saveDebounceTimer) {
+      clearTimeout(saveDebounceTimer);
+      saveDebounceTimer = null;
+      flushMindMapStateToStorage();
+    } else if (mindMapInstance && isModalOpen && !opts.skipFlushBeforeLoad) {
+      flushMindMapStateToStorage();
+    }
+
+    if (clusterState.active) {
+      exitClusterMode({ restoreOnly: true });
+    }
+    if (shortcutManager && typeof shortcutManager.resetCycleState === 'function') {
+      shortcutManager.resetCycleState();
+    }
+
+    if (currentLayerMode === 'chapter' && currentChapterId) {
+      lastVisitedChapterId = currentChapterId;
+    }
+    macroFocusedChapterId = opts.focusChapterId || lastVisitedChapterId || currentChapterId || 'math_ch1';
+    currentLayerMode = 'subject_macro';
+
+    var macroTree = buildSubjectMacroTree(currentActiveSubject || 'math', 3, {
+      restoreSavedExpand: Boolean(opts.restoreSavedExpand)
+    });
+    applySemanticClustering(macroTree);
+    updateBottomCapsuleUI();
+
+    if (mindMapInstance) {
+      clearCachedTreeLines();
+      if (mindMapInstance.renderer) {
+        if (typeof mindMapInstance.renderer.clearActiveNodeList === 'function') {
+          mindMapInstance.renderer.clearActiveNodeList();
+        } else {
+          mindMapInstance.renderer.activeNodeList = [];
+        }
+      }
+      mindMapInstance.setData(macroTree);
+      if (outliner && typeof outliner.setData === 'function') {
+        outliner.setData(macroTree);
+      }
+      setTimeout(function () {
+        if (!mindMapInstance) return;
+        var container = document.getElementById('cognitiveMindMapContainer');
+        if (container && container.offsetWidth > 0 && container.offsetHeight > 0) {
+          mindMapInstance.resize();
+        }
+        if (opts.restoreViewport && typeof opts.restoreViewport.scale === 'number') {
+          var rv = opts.restoreViewport;
+          scheduleViewportAction(function () {
+            if (!mindMapInstance || !mindMapInstance.view) return false;
+            mindMapInstance.view.scale = rv.scale;
+            mindMapInstance.view.x = rv.x;
+            mindMapInstance.view.y = rv.y;
+            if (typeof mindMapInstance.view.transform === 'function') mindMapInstance.view.transform();
+            if (structureController) structureController.updateZoomDisplay();
+            syncAssociativeLinesState();
+            return true;
+          }, true);
+        } else {
+          scheduleFitView(48, { minReadableScale: 0, maxScale: 1.0, verticalAnchor: 'center', horizontalAnchor: 'center', allowHorizontalOverflow: false });
+        }
+        saveCognitiveState();
+      }, 30);
+    } else {
+      saveCognitiveState();
+    }
+    return true;
+  }
+
+  // S 键：在 L1 全量层与 L2 章节层之间无缝切换
+  function toggleLayerMode() {
+    var isEnglish = (currentActiveSubject === 'english' || window.curSubjectId === 'english' || (window.curSubject && window.curSubject.type === 'english'));
+    if (isEnglish) return currentLayerMode;
+
+    if (currentLayerMode === 'subject_macro') {
+      var target = resolveMacroTargetChapterAndNode();
+      loadChapter(target.chapterId, { focusNodeUid: target.nodeUid });
+      return 'chapter';
+    } else {
+      enterSubjectMacroLayer({ restoreSavedExpand: true });
+      return 'subject_macro';
+    }
+  }
+
+  // A / D 键：在章节层切换上/下一章；在全量层循环聚焦定位上/下一章
+  function navigateChapter(delta) {
+    var isEnglish = (currentActiveSubject === 'english' || window.curSubjectId === 'english' || (window.curSubject && window.curSubject.type === 'english'));
+    if (isEnglish) return currentChapterId;
+
+    var step = (typeof delta === 'number' && delta < 0) ? -1 : 1;
+    var list = MATH_CHAPTER_ORDER;
+    var len = list.length;
+
+    if (currentLayerMode === 'subject_macro') {
+      var baseCid = macroFocusedChapterId || lastVisitedChapterId || currentChapterId || 'math_ch1';
+      var curIdx = list.indexOf(baseCid);
+      if (curIdx === -1) curIdx = 1;
+      var nextCid = list[(curIdx + step + len) % len];
+      macroFocusedChapterId = nextCid;
+      currentChapterId = nextCid;
+      lastVisitedChapterId = nextCid;
+      updateBottomCapsuleUI();
+
+      // 在全量层画布中定位并选中该章对应的分组子树
+      if (mindMapInstance) {
+        var activeCat = (shortcutManager && shortcutManager.categoryCycleState && shortcutManager.categoryCycleState.category) || '';
+        var targetGroupUid = activeCat === 'exam'
+          ? ('macro_exam_' + nextCid)
+          : (activeCat === 'method' ? ('macro_method_' + nextCid) : ('macro_know_' + nextCid));
+        var anchor = activeCat === 'exam' ? 'center' : (activeCat === 'method' ? 'left' : 'right');
+
+        ensureNodesExpanded([targetGroupUid], function () {
+          if (mindMapInstance.renderer && typeof mindMapInstance.renderer.findNodeByUid === 'function') {
+            var gNode = mindMapInstance.renderer.findNodeByUid(targetGroupUid);
+            if (gNode) {
+              mindMapInstance.renderer.clearActiveNodeList();
+              mindMapInstance.renderer.addNodeToActiveList(gNode);
+            }
+          }
+          scheduleViewportAction(function () {
+            return fitSubtreeToViewport([targetGroupUid], {
+              padding: 48,
+              minReadableScale: 0.85,
+              maxScale: 1.05,
+              verticalAnchor: 'top',
+              horizontalAnchor: anchor,
+              allowHorizontalOverflow: true,
+              animate: true,
+              duration: 240
+            });
+          }, true);
+          saveCognitiveState();
+        });
+      } else {
+        saveCognitiveState();
+      }
+      return nextCid;
+    } else {
+      var chIdx = list.indexOf(currentChapterId);
+      if (chIdx === -1) chIdx = 1;
+      var targetChapter = list[(chIdx + step + len) % len];
+      loadChapter(targetChapter);
+      return targetChapter;
+    }
   }
 
   // 待确认标签一键转正 (Shift + 空格)
@@ -638,9 +1381,9 @@
     while (cur) {
       var uid = getNodeUid(cur);
       var text = (typeof cur.getData === 'function' ? cur.getData('text') : (cur.data && cur.data.text)) || '';
-      if (uid === 'branch_exam_points' || uid.indexOf('kp_') === 0 || text === '考点') return 'top_exam';
-      if (uid === 'branch_knowledge' || uid.indexOf('sec_') === 0 || uid.indexOf('k_') === 0 || text === '知识点') return 'left_know';
-      if (uid === 'branch_methods' || uid.indexOf('m_') === 0 || text === '解法' || text.indexOf('招法') !== -1) return 'right_method';
+      if (uid === 'branch_exam_points' || uid.indexOf('kp_') === 0 || uid.indexOf('macro_exam_') === 0 || text === '考点') return 'top_exam';
+      if (uid === 'branch_knowledge' || uid.indexOf('sec_') === 0 || uid.indexOf('k_') === 0 || uid.indexOf('macro_know_') === 0 || text === '知识点') return 'left_know';
+      if (uid === 'branch_methods' || uid.indexOf('m_') === 0 || uid.indexOf('macro_method_') === 0 || text === '解法' || text.indexOf('招法') !== -1) return 'right_method';
       cur = cur.parent;
     }
     if (node && node.dir === 'left') return 'left_know';
@@ -1980,11 +2723,23 @@
 
     var isEnglish = (currentActiveSubject === 'english' || window.curSubjectId === 'english' || (window.curSubject && window.curSubject.type === 'english'));
     if (isEnglish) {
+      currentLayerMode = 'chapter';
       currentChapterId = 'english_translation';
-    } else if (!currentChapterId || !chapterRegistry.has(currentChapterId)) {
+    } else if (currentLayerMode !== 'subject_macro' && (!currentChapterId || !chapterRegistry.has(currentChapterId))) {
       currentChapterId = 'math_ch1';
     }
-    var initialData = getInitialChapterData(currentChapterId);
+    var initialData;
+    var preserveExpandOnInit = Boolean(initMindMap._preserveExpandState);
+    if (currentLayerMode === 'subject_macro' && !isEnglish) {
+      currentChapterId = 'macro_' + (currentActiveSubject || 'math');
+      initialData = buildSubjectMacroTree(currentActiveSubject || 'math', 3, {
+        preserveExpandState: preserveExpandOnInit
+      });
+    } else {
+      initialData = getInitialChapterData(currentChapterId, {
+        preserveExpandState: preserveExpandOnInit
+      });
+    }
     applySemanticClustering(initialData);
 
     mindMapInstance = new MindMap({
@@ -2103,6 +2858,11 @@
         isActiveCheck: checkIsActive,
         mountSwitcher: true
       });
+      if (typeof dualViewController.on === 'function') {
+        dualViewController.on('view_change', function () {
+          saveCognitiveState();
+        });
+      }
     }
 
     if (window.MindMapShortcutDrawer) {
@@ -2138,9 +2898,14 @@
           scheduleViewportAction(function () {
             return fitCanvasToViewport(48, fitOpts);
           }, !treeModified);
+          scheduleSaveCognitiveState();
         },
         onCategoryFocus: function (targetCategory, activeStep, cycleState, treeModified) {
           updateLevelButtonsUI(99);
+          if (activeStep && activeStep.chapterId) {
+            macroFocusedChapterId = activeStep.chapterId;
+            updateBottomCapsuleUI();
+          }
           var rootUids = (activeStep && Array.isArray(activeStep.targetRootUids)) ? activeStep.targetRootUids : [];
           var fitOpts = {
             padding: 48,
@@ -2153,6 +2918,7 @@
           scheduleViewportAction(function () {
             return fitSubtreeToViewport(rootUids, fitOpts);
           }, !treeModified);
+          scheduleSaveCognitiveState();
         }
       });
     }
@@ -2173,6 +2939,7 @@
           updateNexusLines();
         }
       });
+      updateBottomCapsuleUI();
     }
 
     // 节点右键交互：右键点击存在关联线的节点，触发 1对N 原树拓扑剪枝聚拢（拖拽平移画布时不误触）
@@ -2255,6 +3022,11 @@
         clearFocusResonance();
         return;
       }
+      var srcChId = node.getData('sourceChapterId') || node.getData('targetChapterId');
+      if (currentLayerMode === 'subject_macro' && srcChId) {
+        macroFocusedChapterId = srcChId;
+        updateBottomCapsuleUI();
+      }
       var targets = getTargetsByUid(uid);
       if (Array.isArray(targets) && targets.length > 0) {
         activeResonanceUid = uid;
@@ -2264,10 +3036,11 @@
       }
     });
 
-    // 视口平移与缩放后，实时同步关联线高亮与隐现状态
+    // 视口平移与缩放后，实时同步关联线高亮与隐现状态，并防抖记忆当前相机坐标
     mindMapInstance.on('view_after_render', function () {
       syncAssociativeLinesState();
       updateNexusLines();
+      scheduleSaveCognitiveState();
     });
 
     mindMapInstance.on('node_tree_render_end', function () {
@@ -2863,6 +3636,7 @@
       isAssociativeLineVisible = !isAssociativeLineVisible;
     }
     syncAssociativeLinesState();
+    saveCognitiveState();
     return isAssociativeLineVisible;
   }
 
@@ -3155,7 +3929,7 @@
       }
     }
 
-    // 快捷键单键系统 (1, 2, 3, Q, W, E, L) - 非打字编辑态下直接单键极速触发
+    // 快捷键单键系统 (1, 2, 3, Q, W, E, L, S, A, D) - 非打字编辑态下直接单键极速触发
     if (!isTyping && !e.ctrlKey && !e.metaKey && !e.altKey) {
       if (!e.shiftKey) {
         if (e.key === '1') {
@@ -3193,6 +3967,18 @@
           toggleAssociativeLines();
           return true;
         }
+        if (k === 's') {
+          toggleLayerMode();
+          return true;
+        }
+        if (k === 'a') {
+          navigateChapter(-1);
+          return true;
+        }
+        if (k === 'd') {
+          navigateChapter(1);
+          return true;
+        }
       }
     }
 
@@ -3215,6 +4001,27 @@
     return false;
   }
 
+  function applySavedViewportOrFit(savedVp, fallbackFitOpts) {
+    if (!mindMapInstance || !mindMapInstance.view) return false;
+    if (savedVp && typeof savedVp.scale === 'number' && typeof savedVp.x === 'number' && typeof savedVp.y === 'number' && isFinite(savedVp.scale) && savedVp.scale > 0.05) {
+      stopCameraFlight();
+      mindMapInstance.view.scale = savedVp.scale;
+      mindMapInstance.view.x = savedVp.x;
+      mindMapInstance.view.y = savedVp.y;
+      if (typeof mindMapInstance.view.transform === 'function') {
+        mindMapInstance.view.transform();
+      }
+      if (typeof mindMapInstance.view.emitEvent === 'function') {
+        mindMapInstance.view.emitEvent('scale');
+        mindMapInstance.view.emitEvent('translate');
+      }
+      if (structureController) structureController.updateZoomDisplay();
+      syncAssociativeLinesState();
+      return true;
+    }
+    return fitCanvasToViewport(48, fallbackFitOpts);
+  }
+
   function setupUI() {
     var modal = document.getElementById('cognitiveModal');
     if (!modal) return;
@@ -3227,6 +4034,16 @@
         }
       }
     });
+
+    // 页面刷新后若刷新前处于 O 键开启状态，自动恢复 O 键认知视图及全部内部状态
+    var savedState = readCognitiveState();
+    if (savedState && savedState.isOpen === true) {
+      setTimeout(function () {
+        if (!isModalOpen) {
+          open({ _fromPageReload: true });
+        }
+      }, 60);
+    }
   }
 
   function open(detail) {
@@ -3235,9 +4052,84 @@
 
     ensureBuiltInChaptersRegistered();
 
-    var reqSubject = (detail && detail.subject) || ((window.curSubjectId === 'english' || (window.curSubject && window.curSubject.type === 'english')) ? 'english' : 'math');
+    var isPageReload = Boolean(detail && detail._fromPageReload);
+    var isFromToggle = Boolean(detail && detail._fromToggle);
+    var savedState = readCognitiveState();
+
+    var reqSubject = (detail && detail.subject) ||
+      (isPageReload && savedState && savedState.subject) ||
+      ((window.curSubjectId === 'english' || (window.curSubject && window.curSubject.type === 'english')) ? 'english' : 'math');
     var isEnglish = (reqSubject === 'english');
-    var targetChapterId = resolveChapterId(detail && detail.chapterId, isEnglish);
+    var hostChapterId = resolveChapterId(detail && detail.chapterId, isEnglish);
+
+    var targetLayerMode = 'chapter';
+    var targetChapterId = hostChapterId;
+    var preserveExpandState = Boolean(detail && detail.preserveExpandState);
+    var restoreSavedViewport = false;
+    var targetViewMode = 'mindmap';
+
+    if (isPageReload && savedState) {
+      // 跨页面刷新恢复：100% 恢复刷新前的层级、章节、导图/大纲模式、L 键连线显隐、节点展开态与相机视口
+      preserveExpandState = true;
+      restoreSavedViewport = true;
+      if (typeof savedState.isAssociativeLineVisible === 'boolean') {
+        isAssociativeLineVisible = savedState.isAssociativeLineVisible;
+      }
+      if (savedState.viewMode === 'outline' || savedState.viewMode === 'mindmap') {
+        targetViewMode = savedState.viewMode;
+      }
+      if (savedState.lastVisitedChapterId && chapterRegistry.has(savedState.lastVisitedChapterId)) {
+        lastVisitedChapterId = savedState.lastVisitedChapterId;
+      }
+      if (savedState.macroFocusedChapterId && chapterRegistry.has(savedState.macroFocusedChapterId)) {
+        macroFocusedChapterId = savedState.macroFocusedChapterId;
+      }
+      if (savedState.lastHostChapterId) {
+        lastHostChapterId = savedState.lastHostChapterId;
+      } else {
+        lastHostChapterId = hostChapterId;
+      }
+      if (!isEnglish && savedState.layerMode === 'subject_macro') {
+        targetLayerMode = 'subject_macro';
+        targetChapterId = 'macro_' + reqSubject;
+      } else {
+        targetLayerMode = 'chapter';
+        var savedCh = savedState.currentChapterId;
+        targetChapterId = (savedCh && chapterRegistry.has(savedCh) && savedCh.indexOf('macro_') !== 0)
+          ? savedCh
+          : (lastVisitedChapterId || hostChapterId);
+      }
+    } else if (detail && !isFromToggle && (detail.chapterId || detail.kpId || detail.methodId)) {
+      // 显式 API 指定章节或点击题目考点/解法徽标进入：精确打开目标章节
+      targetLayerMode = 'chapter';
+      targetChapterId = hostChapterId;
+      lastVisitedChapterId = targetChapterId;
+      lastHostChapterId = hostChapterId;
+    } else {
+      // 手动按 O 键开关：若后台题库章节未变，则恢复上次在 O 键内停留的层级（全量层或 A/D 切过的章节）；若后台题库切了新章节，则智能联动至新章节
+      var prevHostCh = lastHostChapterId || (savedState && savedState.lastHostChapterId) || null;
+      var prevSubj = currentActiveSubject || (savedState && savedState.subject) || reqSubject;
+      if (prevHostCh && prevHostCh === hostChapterId && prevSubj === reqSubject) {
+        var rememberedLayer = currentLayerMode || (savedState && savedState.layerMode) || 'chapter';
+        if (!isEnglish && rememberedLayer === 'subject_macro') {
+          targetLayerMode = 'subject_macro';
+          targetChapterId = 'macro_' + reqSubject;
+          preserveExpandState = true;
+        } else {
+          targetLayerMode = 'chapter';
+          var rememberedCh = (currentChapterId && chapterRegistry.has(currentChapterId) && currentChapterId.indexOf('macro_') !== 0)
+            ? currentChapterId
+            : ((savedState && savedState.currentChapterId && chapterRegistry.has(savedState.currentChapterId)) ? savedState.currentChapterId : hostChapterId);
+          targetChapterId = rememberedCh;
+        }
+      } else {
+        targetLayerMode = 'chapter';
+        targetChapterId = hostChapterId;
+        lastVisitedChapterId = targetChapterId;
+        lastHostChapterId = hostChapterId;
+      }
+    }
+
     var defaultOverviewFitOpts = {
       minReadableScale: 0,
       maxScale: 1.0,
@@ -3251,10 +4143,27 @@
     modal.classList.add('show');
     isModalOpen = true;
 
+    currentActiveSubject = reqSubject;
+    currentLayerMode = targetLayerMode;
+
     if (!mindMapInstance) {
-      currentActiveSubject = reqSubject;
       currentChapterId = targetChapterId;
+      if (targetLayerMode === 'chapter' && chapterRegistry.has(targetChapterId)) {
+        lastVisitedChapterId = targetChapterId;
+      }
+      initMindMap._preserveExpandState = preserveExpandState;
       initMindMap();
+      initMindMap._preserveExpandState = false;
+
+      if (dualViewController && typeof dualViewController.switchView === 'function' && targetViewMode !== 'mindmap') {
+        dualViewController.switchView(targetViewMode);
+      }
+      syncAssociativeLinesState();
+      updateBottomCapsuleUI();
+
+      var vpKeyInit = getCurrentViewportKey();
+      var savedVpInit = (restoreSavedViewport && savedState && savedState.viewports) ? savedState.viewports[vpKeyInit] : null;
+
       setTimeout(function () {
         if (mindMapInstance) {
           var container = document.getElementById('cognitiveMindMapContainer');
@@ -3262,7 +4171,9 @@
             mindMapInstance.resize();
           }
           scheduleViewportAction(function () {
-            return fitCanvasToViewport(48, defaultOverviewFitOpts);
+            var applied = applySavedViewportOrFit(savedVpInit, defaultOverviewFitOpts);
+            saveCognitiveState({ isOpen: true });
+            return applied;
           }, true);
         }
       }, 40);
@@ -3271,19 +4182,45 @@
         exitClusterMode({ restoreOnly: true });
       }
       if (mindMapInstance.keyCommand) mindMapInstance.keyCommand.recovery();
-      if (dualViewController && typeof dualViewController.getCurrentView === 'function' && dualViewController.getCurrentView() !== 'mindmap') {
-        dualViewController.switchView('mindmap');
+      if (dualViewController && typeof dualViewController.getCurrentView === 'function') {
+        if (dualViewController.getCurrentView() !== targetViewMode) {
+          dualViewController.switchView(targetViewMode);
+        }
       }
       if (shortcutManager && typeof shortcutManager.resetCycleState === 'function') {
         shortcutManager.resetCycleState();
       }
-      if (currentActiveSubject !== reqSubject || currentChapterId !== targetChapterId) {
-        currentActiveSubject = reqSubject;
-        loadChapter(targetChapterId);
+
+      if (targetLayerMode === 'subject_macro') {
+        enterSubjectMacroLayer({
+          subject: reqSubject,
+          preserveExpandState: preserveExpandState
+        });
+        if (restoreSavedViewport && savedState && savedState.viewports) {
+          var savedMacroVp = savedState.viewports['macro_' + reqSubject];
+          if (savedMacroVp) {
+            setTimeout(function () {
+              applySavedViewportOrFit(savedMacroVp, defaultOverviewFitOpts);
+              saveCognitiveState({ isOpen: true });
+            }, 45);
+          }
+        }
+      } else if (currentChapterId !== targetChapterId) {
+        loadChapter(targetChapterId, {
+          preserveExpandState: preserveExpandState
+        });
+        if (restoreSavedViewport && savedState && savedState.viewports && savedState.viewports[targetChapterId]) {
+          var savedChVp = savedState.viewports[targetChapterId];
+          setTimeout(function () {
+            applySavedViewportOrFit(savedChVp, defaultOverviewFitOpts);
+            saveCognitiveState({ isOpen: true });
+          }, 45);
+        }
       } else {
+        currentLayerMode = 'chapter';
         var curRenderTree = (mindMapInstance.renderer && mindMapInstance.renderer.renderTree) || null;
         var expandChanged = false;
-        if (curRenderTree) {
+        if (curRenderTree && !preserveExpandState) {
           normalizeOverviewExpandState(curRenderTree);
           expandChanged = Boolean(curRenderTree._expandModified);
           delete curRenderTree._expandModified;
@@ -3292,8 +4229,11 @@
           }
         }
         updateLevelButtonsUI(2);
+        updateBottomCapsuleUI();
+        var vpKeyCur = getCurrentViewportKey();
+        var savedVpCur = (restoreSavedViewport && savedState && savedState.viewports) ? savedState.viewports[vpKeyCur] : null;
         scheduleViewportAction(function () {
-          return fitCanvasToViewport(48, defaultOverviewFitOpts);
+          return applySavedViewportOrFit(savedVpCur, defaultOverviewFitOpts);
         }, !expandChanged);
         setTimeout(function () {
           if (!mindMapInstance) return;
@@ -3302,11 +4242,15 @@
             mindMapInstance.resize();
           }
           scheduleViewportAction(function () {
-            return fitCanvasToViewport(48, defaultOverviewFitOpts);
+            var applied = applySavedViewportOrFit(savedVpCur, defaultOverviewFitOpts);
+            saveCognitiveState({ isOpen: true });
+            return applied;
           }, true);
         }, 30);
       }
     }
+
+    saveCognitiveState({ isOpen: true });
 
     if (detail && detail.kpId) {
       setTimeout(function () {
@@ -3346,6 +4290,8 @@
       clearFocusResonance();
     }
 
+    flushMindMapStateToStorage();
+
     if (mindMapInstance && mindMapInstance.keyCommand) {
       mindMapInstance.keyCommand.pause();
     }
@@ -3357,11 +4303,22 @@
       }
     }, 180);
     isModalOpen = false;
+    saveCognitiveState({ isOpen: false });
   }
 
   function toggle(detail) {
     if (isModalOpen) close();
-    else open(detail);
+    else open(Object.assign({}, detail || {}, { _fromToggle: true }));
+  }
+
+  function onStorageRefresh() {
+    var saved = readCognitiveState();
+    if (!saved) return;
+    if (saved.isOpen && !isModalOpen) {
+      open({ _fromPageReload: true });
+    } else if (!saved.isOpen && isModalOpen) {
+      close();
+    }
   }
 
   function jumpToExamPointQuestions(kpId) {
@@ -3416,10 +4373,20 @@
     getDualViewController: function () { return dualViewController; },
     getShortcutDrawer: function () { return shortcutDrawer; },
     getShortcutManager: function () { return shortcutManager; },
+    getStructureController: function () { return structureController; },
     registerChapterMindMap: registerChapterMindMap,
     resolveChapterId: resolveChapterId,
     loadChapter: loadChapter,
     buildSubjectMacroTree: buildSubjectMacroTree,
+    enterSubjectMacroLayer: enterSubjectMacroLayer,
+    toggleLayerMode: toggleLayerMode,
+    navigateChapter: navigateChapter,
+    getLayerMode: function () { return currentLayerMode; },
+    getMacroFocusedChapterId: function () { return macroFocusedChapterId; },
+    getLastVisitedChapterId: function () { return lastVisitedChapterId; },
+    readCognitiveState: readCognitiveState,
+    saveCognitiveState: saveCognitiveState,
+    onStorageRefresh: onStorageRefresh,
     confirmPendingNode: confirmPendingNode,
     persistCurrentMindMapState: persistCurrentMindMapState,
     getChapterRegistry: function () { ensureBuiltInChaptersRegistered(); return chapterRegistry; },
