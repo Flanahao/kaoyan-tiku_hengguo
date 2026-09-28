@@ -122,7 +122,8 @@
         wrap.appendChild(cardEl);
         pending.push({ wrap: wrap, cardEl: cardEl, key: key });
       }
-      if (d.expand !== false && Array.isArray(nodeObj.children)) {
+      var shouldWalkChildren = Boolean(options && options.allNodes) || (d.expand !== false);
+      if (shouldWalkChildren && Array.isArray(nodeObj.children)) {
         for (var i = 0; i < nodeObj.children.length; i++) {
           walk(nodeObj.children[i], layerIndex + 1);
         }

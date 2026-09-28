@@ -821,6 +821,22 @@
           scheduleFitView(48, { minReadableScale: 0, maxScale: 1.0, verticalAnchor: 'center', horizontalAnchor: 'center', allowHorizontalOverflow: false });
         }
         saveCognitiveState();
+        if (window.MindMapNodeRenderer && typeof window.MindMapNodeRenderer.batchPreMeasureTree === 'function') {
+          var preWarmContainer = cEl || document.getElementById('cognitiveMindMapContainer');
+          if (preWarmContainer) {
+            var preWarmFn = function () {
+              window.MindMapNodeRenderer.batchPreMeasureTree(data, preWarmContainer, {
+                allNodes: true,
+                onActionClick: handleNodeActionClick
+              });
+            };
+            if (typeof window.requestIdleCallback === 'function') {
+              window.requestIdleCallback(preWarmFn, { timeout: 600 });
+            } else {
+              setTimeout(preWarmFn, 50);
+            }
+          }
+        }
       }, 30);
     } else {
       saveCognitiveState();
@@ -1978,6 +1994,25 @@
     }
   }
 
+  function isCameraFlying() {
+    return Boolean(currentFlightRaf);
+  }
+
+  function waitForCameraFlight(callback) {
+    if (!currentFlightRaf) {
+      if (typeof callback === 'function') callback();
+      return;
+    }
+    var check = function () {
+      if (!currentFlightRaf) {
+        if (typeof callback === 'function') callback();
+      } else {
+        requestAnimationFrame(check);
+      }
+    };
+    requestAnimationFrame(check);
+  }
+
   // 丝滑 cubic-bezier 减速缓动曲线: easeOutCubic (t => 1 - (1-t)^3)
   function easeOutCubic(t) {
     return 1 - Math.pow(1 - t, 3);
@@ -2810,16 +2845,6 @@
         return null;
       }
     });
-
-    var origRender = mindMapInstance.render.bind(mindMapInstance);
-    mindMapInstance.render = function (callback, source) {
-      return origRender(function () {
-        mindMapInstance.emit('node_tree_render_end');
-        if (typeof callback === 'function') {
-          callback();
-        }
-      }, source);
-    };
 
     mindMapInstance.on('data_change', function () {
       persistCurrentMindMapState();
@@ -4413,6 +4438,8 @@
     fitCanvasToViewport: fitCanvasToViewport,
     fitSubtreeToViewport: fitSubtreeToViewport,
     stopCameraFlight: stopCameraFlight,
+    isCameraFlying: isCameraFlying,
+    waitForCameraFlight: waitForCameraFlight,
     applyFocusResonanceByUid: applyFocusResonanceByUid,
     toggleFocusResonanceByUid: toggleFocusResonanceByUid,
     clearFocusResonance: clearFocusResonance,

@@ -135,6 +135,30 @@ async function dispatchKey(ws, key, code, vk, modifiers = 0) {
   }, ++cdpSeq);
 }
 
+async function waitForStableMindMap(ws, timeoutMs = 3500) {
+  return evaluate(ws, `
+    new Promise((resolve) => {
+      const startTime = Date.now();
+      function check() {
+        const ctrl = window.CognitiveViewController;
+        const mm = ctrl && ctrl.getInstance ? ctrl.getInstance() : null;
+        const isRendering = Boolean(mm && mm.renderer && (mm.renderer.isRendering || mm.renderer.hasWaitRendering));
+        const isFlying = Boolean(ctrl && typeof ctrl.isCameraFlying === 'function' && ctrl.isCameraFlying());
+        if (!isRendering && !isFlying) {
+          resolve(true);
+        } else if (Date.now() - startTime > ${timeoutMs}) {
+          resolve(false);
+        } else {
+          requestAnimationFrame(check);
+        }
+      }
+      setTimeout(() => {
+        requestAnimationFrame(check);
+      }, 50);
+    })
+  `);
+}
+
 async function captureScreenshot(ws, filename) {
   const res = await sendCDP(ws, 'Page.captureScreenshot', { format: 'png' }, ++cdpSeq);
   if (res && res.data) {
@@ -882,7 +906,8 @@ async function runTests() {
 
     // 1. 单键 Q (第1次): 知识点全量递归展开到底，不要求可读最小缩放，侧重展示知识点全局并居中入屏；右翼保持语义二级
     await dispatchKey(ws, 'q', 'KeyQ', 81);
-    await sleep(450);
+    await waitForStableMindMap(ws);
+    await sleep(150);
     const qState = await evaluate(ws, `
       (() => {
         const mm = window.CognitiveViewController.getInstance();
@@ -943,7 +968,8 @@ async function runTests() {
 
     // 1b. 连按 Q (第2次 -> §1 函数, 第3次 -> §2 极限, 第4次 -> §3 连续): 验证同键循环切分节聚焦
     await dispatchKey(ws, 'q', 'KeyQ', 81);
-    await sleep(400);
+    await waitForStableMindMap(ws);
+    await sleep(100);
     const qStep1 = await evaluate(ws, `
       (() => {
         const mm = window.CognitiveViewController.getInstance();
@@ -953,7 +979,8 @@ async function runTests() {
       })()
     `);
     await dispatchKey(ws, 'q', 'KeyQ', 81);
-    await sleep(400);
+    await waitForStableMindMap(ws);
+    await sleep(100);
     const qStep2 = await evaluate(ws, `
       (() => {
         const mm = window.CognitiveViewController.getInstance();
@@ -964,7 +991,8 @@ async function runTests() {
     `);
     await captureScreenshot(ws, 'chapter1_q_sec2_limit_focus.png');
     await dispatchKey(ws, 'q', 'KeyQ', 81);
-    await sleep(400);
+    await waitForStableMindMap(ws);
+    await sleep(100);
     const qStep3 = await evaluate(ws, `
       (() => {
         const mm = window.CognitiveViewController.getInstance();
@@ -980,7 +1008,8 @@ async function runTests() {
 
     // 2. 单键 W: 考点全量展开并独占视口居中，左翼知识点保持语义二级（1.1~3.3 可见，公式折叠）
     await dispatchKey(ws, 'w', 'KeyW', 87);
-    await sleep(600);
+    await waitForStableMindMap(ws);
+    await sleep(150);
     const wState = await evaluate(ws, `
       (() => {
         const mm = window.CognitiveViewController.getInstance();
@@ -1023,7 +1052,8 @@ async function runTests() {
 
     // 3. 单键 E: 解法全量展开并独占视口配框，左翼知识点与考点保持语义二级
     await dispatchKey(ws, 'e', 'KeyE', 69);
-    await sleep(600);
+    await waitForStableMindMap(ws);
+    await sleep(150);
     const eState = await evaluate(ws, `
       (() => {
         const mm = window.CognitiveViewController.getInstance();
@@ -1067,7 +1097,8 @@ async function runTests() {
 
     // 4. 单键 1 (Level 1 — 分节骨架): 左翼展开至 §1~§3（1.1~3.3 折叠），右翼展开至 5大考点 & 7大招法
     await dispatchKey(ws, '1', 'Digit1', 49);
-    await sleep(550);
+    await waitForStableMindMap(ws);
+    await sleep(150);
     const key1State = await evaluate(ws, `
       (() => {
         const mm = window.CognitiveViewController.getInstance();
@@ -1091,7 +1122,8 @@ async function runTests() {
 
     // 5. 单键 2 (Level 2 — 核心全景 · 同级对齐): 左翼展开至 1.1~3.3，右翼展开至 5大考点 & 7大招法，微观叶子折叠
     await dispatchKey(ws, '2', 'Digit2', 50);
-    await sleep(550);
+    await waitForStableMindMap(ws);
+    await sleep(150);
     const key2State = await evaluate(ws, `
       (() => {
         const mm = window.CognitiveViewController.getInstance();
@@ -1119,7 +1151,8 @@ async function runTests() {
 
     // 6. 单键 3 (Level 3 — 全图全量展开 · 一屏鸟瞰): 展开全部 101 个节点并一屏完整居中收纳
     await dispatchKey(ws, '3', 'Digit3', 51);
-    await sleep(600);
+    await waitForStableMindMap(ws);
+    await sleep(150);
     const key3State = await evaluate(ws, `
       (() => {
         const mm = window.CognitiveViewController.getInstance();
