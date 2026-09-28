@@ -2937,13 +2937,14 @@
         outliner: outliner,
         onLevelChange: function (lvl, treeModified) {
           updateLevelButtonsUI(lvl);
+          var flightDuration = treeModified ? 160 : 250;
           var fitOpts;
           if (lvl === 3 || lvl === 0) {
-            fitOpts = { minReadableScale: 0, maxScale: 1.0, verticalAnchor: 'center', horizontalAnchor: 'center', allowHorizontalOverflow: false, animate: true, duration: 250 };
+            fitOpts = { minReadableScale: 0, maxScale: 1.0, verticalAnchor: 'center', horizontalAnchor: 'center', allowHorizontalOverflow: false, animate: true, duration: flightDuration };
           } else if (lvl === 1) {
-            fitOpts = { minReadableScale: 0.88, maxScale: 1.05, verticalAnchor: 'center', horizontalAnchor: 'center', allowHorizontalOverflow: false, animate: true, duration: 250 };
+            fitOpts = { minReadableScale: 0.88, maxScale: 1.05, verticalAnchor: 'center', horizontalAnchor: 'center', allowHorizontalOverflow: false, animate: true, duration: flightDuration };
           } else {
-            fitOpts = { minReadableScale: 0.85, maxScale: 1.05, verticalAnchor: 'center', horizontalAnchor: 'center', allowHorizontalOverflow: false, animate: true, duration: 250 };
+            fitOpts = { minReadableScale: 0.85, maxScale: 1.05, verticalAnchor: 'center', horizontalAnchor: 'center', allowHorizontalOverflow: false, animate: true, duration: flightDuration };
           }
           scheduleViewportAction(function () {
             return fitCanvasToViewport(48, fitOpts);
@@ -2957,6 +2958,7 @@
             updateBottomCapsuleUI();
           }
           var rootUids = (activeStep && Array.isArray(activeStep.targetRootUids)) ? activeStep.targetRootUids : [];
+          var flightDuration = treeModified ? 160 : 250;
           var fitOpts = {
             padding: 48,
             minReadableScale: (activeStep && typeof activeStep.minReadableScale === 'number') ? activeStep.minReadableScale : 0.84,
@@ -2965,7 +2967,7 @@
             horizontalAnchor: (activeStep && activeStep.horizontalAnchor) ? activeStep.horizontalAnchor : 'auto',
             allowHorizontalOverflow: (activeStep && typeof activeStep.allowHorizontalOverflow === 'boolean') ? activeStep.allowHorizontalOverflow : true,
             animate: true,
-            duration: 250
+            duration: flightDuration
           };
           scheduleViewportAction(function () {
             return fitSubtreeToViewport(rootUids, fitOpts);

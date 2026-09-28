@@ -137,10 +137,10 @@
       if (targetView === this.currentView) return;
 
       if (targetView === 'outline') {
-        // 1. 从导图同步最新树数据到大纲
-        this.syncMindMapToOutliner();
-
-        // 2. 隐藏导图画布，显示大纲容器
+        if (window.CognitiveViewController && typeof window.CognitiveViewController.stopCameraFlight === 'function') {
+          window.CognitiveViewController.stopCameraFlight();
+        }
+        // 1. 隐藏导图画布，显示大纲容器（先标记 active 使 outliner.isVisible() 为真）
         if (this.mindMapContainer) {
           this.mindMapContainer.style.display = 'none';
         }
@@ -154,6 +154,9 @@
           document.body.classList.add('view-mode-outline');
           document.body.classList.remove('view-mode-mindmap');
         }
+
+        // 2. 从导图同步最新树数据到大纲并渲染
+        this.syncMindMapToOutliner();
 
         // 3. 按钮高亮状态
         if (this.btnOutline) this.btnOutline.classList.add('active');
@@ -179,9 +182,15 @@
         // 2. 从大纲同步最新树数据到导图
         this.syncOutlinerToMindMap();
 
-        // 3. 触发导图重绘与视口居中
-        this.mindMap.resize();
-        this.mindMap.view.reset();
+        // 3. 触发导图尺寸刷新与视口自适应居中（避免 view.reset() 导致画布停留在左上角）
+        if (this.mindMapContainer && this.mindMapContainer.offsetWidth > 0 && this.mindMapContainer.offsetHeight > 0) {
+          this.mindMap.resize();
+        }
+        if (window.CognitiveViewController && typeof window.CognitiveViewController.fitCanvasToViewport === 'function') {
+          window.CognitiveViewController.fitCanvasToViewport(48);
+        } else {
+          this.mindMap.view.reset();
+        }
 
         // 4. 按钮高亮状态
         if (this.btnMindMap) this.btnMindMap.classList.add('active');
@@ -207,17 +216,24 @@
 
     // 导图 -> 大纲 数据同步
     syncMindMapToOutliner() {
-      const data = this.mindMap.getData(false);
+      if (global.CognitiveViewController && typeof global.CognitiveViewController.isClusterActive === 'function' && global.CognitiveViewController.isClusterActive()) {
+        global.CognitiveViewController.exitClusterMode({ restoreOnly: true });
+      }
+      const data = (this.mindMap.renderer && this.mindMap.renderer.renderTree) || this.mindMap.getData(false);
       if (data) {
         this.outliner.setData(data);
       }
     }
 
-    // 大纲 -> 导图 数据同步
+    // 大纲 -> 导图 数据同步（优先复用 updateData 保留节点缓存池，避免全量销毁重测）
     syncOutlinerToMindMap() {
       const data = this.outliner.getData();
       if (data) {
-        this.mindMap.setData(data);
+        if (typeof this.mindMap.updateData === 'function') {
+          this.mindMap.updateData(data);
+        } else {
+          this.mindMap.setData(data);
+        }
       }
     }
 

@@ -123,18 +123,52 @@
       this.mountContainer.appendChild(this.bubbleMenu);
     }
 
-    // 载入思维导图标准树数据并渲染
+    // 载入思维导图标准树数据并按需渲染（大纲不可见时仅同步数据与折叠映射，避免在导图打开瞬间同步阻塞渲染大纲 DOM）
     setData(treeData) {
       if (!treeData) return;
-      this.data = JSON.parse(JSON.stringify(treeData));
+      this.data = JSON.parse(JSON.stringify(treeData, (key, val) => (key === '_node' || key === '_preRenderedCard' || key === '_preRenderedKey' ? undefined : val)));
       this.ensureUidsAndCleanText(this.data);
-      this.render();
+      this.syncCollapsedMapFromData(this.data);
+      if (this.isVisible()) {
+        this.render();
+      }
     }
 
-    // 获取当前大纲最新树形数据
+    // 根据树节点的 expand 属性同步大纲 collapsedMap
+    syncCollapsedMapFromData(rootNode) {
+      if (!rootNode) return;
+      this.collapsedMap.clear();
+      const walk = (n) => {
+        if (!n) return;
+        const d = n.data || {};
+        if (d.uid && d.expand === false && Array.isArray(n.children) && n.children.length > 0) {
+          this.collapsedMap.add(d.uid);
+        }
+        if (Array.isArray(n.children)) {
+          n.children.forEach(walk);
+        }
+      };
+      walk(rootNode);
+    }
+
+    // 获取当前大纲最新树形数据（同步 collapsedMap 至 expand 属性）
     getData() {
       if (!this.data) return null;
-      return JSON.parse(JSON.stringify(this.data));
+      const cloned = JSON.parse(JSON.stringify(this.data));
+      const walk = (n, isRoot) => {
+        if (!n) return;
+        if (!n.data) n.data = {};
+        if (isRoot) {
+          n.data.expand = true;
+        } else if (n.data.uid) {
+          n.data.expand = !this.collapsedMap.has(n.data.uid);
+        }
+        if (Array.isArray(n.children)) {
+          n.children.forEach(c => walk(c, false));
+        }
+      };
+      walk(cloned, true);
+      return cloned;
     }
 
     // 确保每个节点均拥有唯一 uid，并过滤可能的外层段落标签
@@ -986,10 +1020,20 @@
       this.emit('change', this.getData());
     }
 
+    isVisible() {
+      if (!this.container) return false;
+      if (this.container.id === 'cognitiveOutlinerContainer') {
+        return this.container.classList.contains('active');
+      }
+      return this.container.offsetParent !== null || this.container.style.display !== 'none';
+    }
+
     // 全部展开大纲节点
     expandAll() {
       this.collapsedMap.clear();
-      this.render();
+      if (this.isVisible()) {
+        this.render();
+      }
     }
 
     // 按指定深度展开大纲节点
@@ -1007,7 +1051,9 @@
       if (this.data && Array.isArray(this.data.children)) {
         this.data.children.forEach(child => walk(child, 1));
       }
-      this.render();
+      if (this.isVisible()) {
+        this.render();
+      }
     }
 
     // 全部折叠大纲节点 (折叠所有有一级子级及以上的行)
@@ -1026,7 +1072,9 @@
       if (this.data && Array.isArray(this.data.children)) {
         this.data.children.forEach(walk);
       }
-      this.render();
+      if (this.isVisible()) {
+        this.render();
+      }
     }
   }
 

@@ -53,6 +53,7 @@
 
   var htmlCache = new Map();
   var sizeCache = new Map();
+  var domCardCache = new Map();
   var batchMeasureHost = null;
 
   function computeSizeCacheKey(rawData, layerIndex) {
@@ -65,7 +66,10 @@
       ? new Set(rawResonanceTargets.filter(uid => uid && uid !== rawData.uid)).size
       : 0;
     const catFlag = rawData.isCatalogLeaf ? 'cat' : '';
-    return `${layerIndex}|${role}|${catFlag}|${tagText}|${text}|${rawData.questionCount || 0}|${rawData.hasWidget ? rawData.widgetType : ''}|${resLen}|${rawData.fontWeight || ''}|${rawData.fontStyle || ''}|${rawData.textDecoration || ''}`;
+    const uid = rawData.uid || '';
+    const hl = rawData.highlightColor || '';
+    const tagType = rawData.tagType || '';
+    return `${uid}|${layerIndex}|${role}|${catFlag}|${tagText}|${tagType}|${hl}|${text}|${rawData.questionCount || 0}|${rawData.hasWidget ? rawData.widgetType : ''}|${resLen}|${rawData.fontWeight || ''}|${rawData.fontStyle || ''}|${rawData.textDecoration || ''}`;
   }
 
   function ensureNodeRectCacheHook(node) {
@@ -74,6 +78,11 @@
     if (!proto || proto._hasFastSizeCache || typeof proto.getNodeRect !== 'function') return;
     var origGetNodeRect = proto.getNodeRect;
     proto.getNodeRect = function () {
+      if (!this._mmSizeCacheKey && this.nodeData && this.nodeData.data) {
+        var rawData = this.nodeData.data;
+        var layerIndex = this.layerIndex !== undefined ? this.layerIndex : (this.isRoot ? 0 : 2);
+        this._mmSizeCacheKey = computeSizeCacheKey(rawData, layerIndex);
+      }
       if (this.isUseCustomNodeContent && this.isUseCustomNodeContent() &&
           (!this.hasCustomWidth || !this.hasCustomWidth()) &&
           this._mmSizeCacheKey && sizeCache.has(this._mmSizeCacheKey)) {
@@ -165,8 +174,79 @@
       return preCard;
     }
 
+    const rawResonanceTargets = rawData.associativeLineTargets || rawData.resonanceLinks;
+    const resonanceTargets = Array.isArray(rawResonanceTargets)
+      ? Array.from(new Set(rawResonanceTargets.filter(uid => uid && uid !== rawData.uid)))
+      : [];
+
     let text = rawData.text || '';
     text = normalizeInlineHighlights(stripOuterParagraph(text));
+
+    function bindCardActionListeners(cardEl) {
+      if (resonanceTargets && resonanceTargets.length > 0) {
+        const linkBtn = cardEl.querySelector('.action-resonance');
+        if (linkBtn) {
+          linkBtn.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+          });
+          linkBtn.addEventListener('mouseup', (e) => {
+            e.stopPropagation();
+          });
+          linkBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            if (typeof opts.onResonanceClick === 'function') {
+              opts.onResonanceClick(rawData.uid, rawData, linkBtn);
+            } else if (typeof opts.onActionClick === 'function') {
+              opts.onActionClick('resonance', rawData.uid, rawData, linkBtn);
+            } else if (global.CognitiveViewController && typeof global.CognitiveViewController.toggleNodeCluster === 'function') {
+              global.CognitiveViewController.toggleNodeCluster(rawData.uid);
+            } else if (global.CognitiveViewController && typeof global.CognitiveViewController.toggleFocusResonanceByUid === 'function') {
+              global.CognitiveViewController.toggleFocusResonanceByUid(rawData.uid);
+            } else if (global.CognitiveViewController && typeof global.CognitiveViewController.applyFocusResonanceByUid === 'function') {
+              global.CognitiveViewController.applyFocusResonanceByUid(rawData.uid);
+            }
+          });
+        }
+      }
+
+      if (rawData.questionCount) {
+        const qBadge = cardEl.querySelector('.action-questions');
+        if (qBadge) {
+          qBadge.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (typeof opts.onQuestionJump === 'function') {
+              opts.onQuestionJump(rawData.uid, rawData);
+            } else if (global.CognitiveViewController && typeof global.CognitiveViewController.jumpToExamPointQuestions === 'function') {
+              global.CognitiveViewController.jumpToExamPointQuestions(rawData.uid);
+            }
+          });
+        }
+      }
+
+      if (rawData.hasWidget && rawData.widgetType) {
+        const vizBtn = cardEl.querySelector('.action-widget');
+        if (vizBtn) {
+          vizBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (typeof opts.onWidgetClick === 'function') {
+              opts.onWidgetClick(rawData.widgetType, rawData, vizBtn);
+            } else if (global.CognitiveViewController && typeof global.CognitiveViewController.openWidgetPopover === 'function') {
+              global.CognitiveViewController.openWidgetPopover(rawData.widgetType, rawData.widgetTitle || text, vizBtn);
+            } else if (global.MathVizWidget && typeof global.MathVizWidget.openPopover === 'function') {
+              global.MathVizWidget.openPopover(rawData.widgetType, vizBtn, rawData.widgetTitle || text);
+            }
+          });
+        }
+      }
+    }
+
+    if (cacheKey && domCardCache.has(cacheKey)) {
+      const cachedTpl = domCardCache.get(cacheKey);
+      const cardEl = cachedTpl.cloneNode(true);
+      bindCardActionListeners(cardEl);
+      return cardEl;
+    }
 
     // 1. 若全局存在 MarkdownLatexEngine，进行行内公式与 Markdown 编译（带内存级缓存）
     let renderedHtml = htmlCache.get(text);
@@ -205,10 +285,6 @@
     if (rawData.isCatalogLeaf || (rawData.uid && /^kp_gs\d+_\d+_/.test(rawData.uid))) {
       cardClasses += ' mm-catalog-leaf';
     }
-    const rawResonanceTargets = rawData.associativeLineTargets || rawData.resonanceLinks;
-    const resonanceTargets = Array.isArray(rawResonanceTargets)
-      ? Array.from(new Set(rawResonanceTargets.filter(uid => uid && uid !== rawData.uid)))
-      : [];
     if (resonanceTargets.length > 0) {
       cardClasses += ' has-resonance-targets';
     }
@@ -254,27 +330,6 @@
       linkBtn.className = 'mm-node-action-pill action-resonance mm-pill-resonance mm-node-resonance-pill';
       linkBtn.title = '左键点击此徽标或右键节点聚拢关联知识点、考点与解法';
       linkBtn.textContent = `关联 ${resonanceTargets.length}`;
-      linkBtn.addEventListener('mousedown', (e) => {
-        e.stopPropagation();
-      });
-      linkBtn.addEventListener('mouseup', (e) => {
-        e.stopPropagation();
-      });
-      linkBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        if (typeof opts.onResonanceClick === 'function') {
-          opts.onResonanceClick(rawData.uid, rawData, linkBtn);
-        } else if (typeof opts.onActionClick === 'function') {
-          opts.onActionClick('resonance', rawData.uid, rawData, linkBtn);
-        } else if (global.CognitiveViewController && typeof global.CognitiveViewController.toggleNodeCluster === 'function') {
-          global.CognitiveViewController.toggleNodeCluster(rawData.uid);
-        } else if (global.CognitiveViewController && typeof global.CognitiveViewController.toggleFocusResonanceByUid === 'function') {
-          global.CognitiveViewController.toggleFocusResonanceByUid(rawData.uid);
-        } else if (global.CognitiveViewController && typeof global.CognitiveViewController.applyFocusResonanceByUid === 'function') {
-          global.CognitiveViewController.applyFocusResonanceByUid(rawData.uid);
-        }
-      });
       cardEl.appendChild(linkBtn);
     }
 
@@ -286,14 +341,6 @@
       qBadge.dataset.kpid = rawData.uid || '';
       qBadge.title = '跳转题库练习此考点真题';
       qBadge.textContent = `${rawData.questionCount}题 →`;
-      qBadge.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (typeof opts.onQuestionJump === 'function') {
-          opts.onQuestionJump(rawData.uid, rawData);
-        } else if (global.CognitiveViewController && typeof global.CognitiveViewController.jumpToExamPointQuestions === 'function') {
-          global.CognitiveViewController.jumpToExamPointQuestions(rawData.uid);
-        }
-      });
       cardEl.appendChild(qBadge);
     }
 
@@ -304,17 +351,13 @@
       vizBtn.className = 'mm-node-action-pill action-widget mm-pill-widget mm-node-viz-pill';
       vizBtn.title = '点击打开交互式数学几何图解';
       vizBtn.textContent = '几何图解';
-      vizBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (typeof opts.onWidgetClick === 'function') {
-          opts.onWidgetClick(rawData.widgetType, rawData, vizBtn);
-        } else if (global.CognitiveViewController && typeof global.CognitiveViewController.openWidgetPopover === 'function') {
-          global.CognitiveViewController.openWidgetPopover(rawData.widgetType, rawData.widgetTitle || text, vizBtn);
-        } else if (global.MathVizWidget && typeof global.MathVizWidget.openPopover === 'function') {
-          global.MathVizWidget.openPopover(rawData.widgetType, vizBtn, rawData.widgetTitle || text);
-        }
-      });
       cardEl.appendChild(vizBtn);
+    }
+
+    bindCardActionListeners(cardEl);
+
+    if (cacheKey) {
+      domCardCache.set(cacheKey, cardEl.cloneNode(true));
     }
 
     return cardEl;
@@ -328,6 +371,7 @@
     normalizeInlineHighlights: normalizeInlineHighlights,
     getSizeCache: function () { return sizeCache; },
     getHtmlCache: function () { return htmlCache; },
-    clearCache: function () { htmlCache.clear(); sizeCache.clear(); }
+    getDomCardCache: function () { return domCardCache; },
+    clearCache: function () { htmlCache.clear(); sizeCache.clear(); domCardCache.clear(); }
   };
 })(typeof window !== 'undefined' ? window : this);

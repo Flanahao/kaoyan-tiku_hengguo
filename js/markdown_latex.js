@@ -211,7 +211,17 @@
     return result;
   }
 
+  var inlineRenderCache = new Map();
+
   function renderInline(src, options) {
+    if (!options && typeof src === 'string') {
+      var cached = inlineRenderCache.get(src);
+      if (cached !== undefined) return cached;
+      var out = render(src, { inline: true });
+      if (inlineRenderCache.size > 2000) inlineRenderCache.clear();
+      inlineRenderCache.set(src, out);
+      return out;
+    }
     var opts = Object.assign({}, options, { inline: true });
     return render(src, opts);
   }
