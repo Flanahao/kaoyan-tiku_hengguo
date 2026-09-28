@@ -961,6 +961,7 @@
           });
         }).filter(Boolean);
       }
+      var defaultChapterExpand = Boolean(opts.expandChapterGroups);
       examSector.children.push({
         data: {
           text: chTitle,
@@ -975,7 +976,7 @@
           sourceNodeUid: 'branch_exam_points',
           targetChapterId: cid,
           targetNodeUid: 'branch_exam_points',
-          expand: true
+          expand: defaultChapterExpand
         },
         children: examChildren
       });
@@ -1004,7 +1005,7 @@
           sourceNodeUid: 'branch_methods',
           targetChapterId: cid,
           targetNodeUid: 'branch_methods',
-          expand: true
+          expand: defaultChapterExpand
         },
         children: methodChildren
       });
@@ -1016,7 +1017,7 @@
           var clonedSec = cloneMacroSubtree(secNode, cid, 2, null);
           if (clonedSec && clonedSec.data) {
             // 默认在全量层二级总览展开至 §1~§4，按 3 键或 Q 键或点击展开至 1.1~4.2
-            clonedSec.data.expand = (maxLvl > 3);
+            clonedSec.data.expand = defaultChapterExpand ? (maxLvl > 3) : false;
             clonedSec.data.targetChapterId = cid;
             clonedSec.data.targetNodeUid = clonedSec.data.uid || '';
           }
@@ -1038,7 +1039,7 @@
           sourceNodeUid: 'branch_knowledge',
           targetChapterId: cid,
           targetNodeUid: 'branch_knowledge',
-          expand: true
+          expand: defaultChapterExpand
         },
         children: knowChildren
       });
@@ -3077,6 +3078,15 @@
       if (currentLayerMode === 'subject_macro' && srcChId) {
         macroFocusedChapterId = srcChId;
         updateBottomCapsuleUI();
+      }
+      if (currentLayerMode === 'subject_macro' && node.getData('isMacroChapterGroup') && node.getData('expand') === false) {
+        if (typeof node.setData === 'function') {
+          node.setData({ expand: true });
+        }
+        if (node.nodeData && node.nodeData.data) {
+          node.nodeData.data.expand = true;
+        }
+        mindMapInstance.render();
       }
       var targets = getTargetsByUid(uid);
       if (Array.isArray(targets) && targets.length > 0) {

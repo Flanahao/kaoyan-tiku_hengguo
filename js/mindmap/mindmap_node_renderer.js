@@ -325,6 +325,9 @@
     batchPreMeasureTree: batchPreMeasureTree,
     computeSizeCacheKey: computeSizeCacheKey,
     stripOuterParagraph: stripOuterParagraph,
-    normalizeInlineHighlights: normalizeInlineHighlights
+    normalizeInlineHighlights: normalizeInlineHighlights,
+    getSizeCache: function () { return sizeCache; },
+    getHtmlCache: function () { return htmlCache; },
+    clearCache: function () { htmlCache.clear(); sizeCache.clear(); }
   };
 })(typeof window !== 'undefined' ? window : this);
