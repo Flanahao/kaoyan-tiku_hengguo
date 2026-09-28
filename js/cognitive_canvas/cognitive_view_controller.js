@@ -180,7 +180,7 @@
     stateSaveDebounceTimer = setTimeout(function () {
       stateSaveDebounceTimer = null;
       saveCognitiveState();
-    }, 120);
+    }, 400);
   }
 
   function getChapterDisplayTitle(cid) {
@@ -764,6 +764,12 @@
     macroFocusedChapterId = currentChapterId;
     currentLayerMode = 'chapter';
 
+    var container = document.getElementById('cognitiveMindMapContainer');
+    var shouldCrossFade = Boolean(container && isModalOpen && !opts.skipCrossFade);
+    if (shouldCrossFade) {
+      container.classList.add('mm-canvas-crossfade', 'mm-canvas-fadeout');
+    }
+
     var data = getInitialChapterData(currentChapterId, {
       preserveExpandState: Boolean(opts.preserveExpandState)
     });
@@ -785,9 +791,17 @@
       }
       setTimeout(function () {
         if (!mindMapInstance) return;
-        var container = document.getElementById('cognitiveMindMapContainer');
-        if (container && container.offsetWidth > 0 && container.offsetHeight > 0) {
+        var cEl = document.getElementById('cognitiveMindMapContainer');
+        if (cEl && cEl.offsetWidth > 0 && cEl.offsetHeight > 0) {
           mindMapInstance.resize();
+        }
+        if (shouldCrossFade && cEl) {
+          requestAnimationFrame(function () {
+            cEl.classList.remove('mm-canvas-fadeout');
+            setTimeout(function () {
+              if (cEl) cEl.classList.remove('mm-canvas-crossfade');
+            }, 65);
+          });
         }
         if (opts.restoreViewport && typeof opts.restoreViewport.scale === 'number') {
           var rv = opts.restoreViewport;
@@ -1135,6 +1149,12 @@
     macroFocusedChapterId = opts.focusChapterId || lastVisitedChapterId || currentChapterId || 'math_ch1';
     currentLayerMode = 'subject_macro';
 
+    var container = document.getElementById('cognitiveMindMapContainer');
+    var shouldCrossFade = Boolean(container && isModalOpen && !opts.skipCrossFade);
+    if (shouldCrossFade) {
+      container.classList.add('mm-canvas-crossfade', 'mm-canvas-fadeout');
+    }
+
     var macroTree = buildSubjectMacroTree(currentActiveSubject || 'math', 3, {
       restoreSavedExpand: Boolean(opts.restoreSavedExpand)
     });
@@ -1156,9 +1176,17 @@
       }
       setTimeout(function () {
         if (!mindMapInstance) return;
-        var container = document.getElementById('cognitiveMindMapContainer');
-        if (container && container.offsetWidth > 0 && container.offsetHeight > 0) {
+        var cEl = document.getElementById('cognitiveMindMapContainer');
+        if (cEl && cEl.offsetWidth > 0 && cEl.offsetHeight > 0) {
           mindMapInstance.resize();
+        }
+        if (shouldCrossFade && cEl) {
+          requestAnimationFrame(function () {
+            cEl.classList.remove('mm-canvas-fadeout');
+            setTimeout(function () {
+              if (cEl) cEl.classList.remove('mm-canvas-crossfade');
+            }, 65);
+          });
         }
         if (opts.restoreViewport && typeof opts.restoreViewport.scale === 'number') {
           var rv = opts.restoreViewport;
@@ -1969,7 +1997,7 @@
     }
 
     var opts = options || {};
-    var duration = typeof opts.duration === 'number' ? opts.duration : 280;
+    var duration = typeof opts.duration === 'number' ? opts.duration : 250;
     var startScale = mindMapInstance.view.scale;
     var startX = mindMapInstance.view.x;
     var startY = mindMapInstance.view.y;
@@ -2149,7 +2177,7 @@
 
     if (opts.animate) {
       flyCameraTo(computed.scale, computed.x, computed.y, {
-        duration: typeof opts.duration === 'number' ? opts.duration : 280
+        duration: typeof opts.duration === 'number' ? opts.duration : 250
       }, opts.onComplete);
       return true;
     }
@@ -2771,6 +2799,16 @@
       }
     });
 
+    var origRender = mindMapInstance.render.bind(mindMapInstance);
+    mindMapInstance.render = function (callback, source) {
+      return origRender(function () {
+        mindMapInstance.emit('node_tree_render_end');
+        if (typeof callback === 'function') {
+          callback();
+        }
+      }, source);
+    };
+
     mindMapInstance.on('data_change', function () {
       persistCurrentMindMapState();
     });
@@ -2889,11 +2927,11 @@
           updateLevelButtonsUI(lvl);
           var fitOpts;
           if (lvl === 3 || lvl === 0) {
-            fitOpts = { minReadableScale: 0, maxScale: 1.0, verticalAnchor: 'center', horizontalAnchor: 'center', allowHorizontalOverflow: false };
+            fitOpts = { minReadableScale: 0, maxScale: 1.0, verticalAnchor: 'center', horizontalAnchor: 'center', allowHorizontalOverflow: false, animate: true, duration: 250 };
           } else if (lvl === 1) {
-            fitOpts = { minReadableScale: 0.88, maxScale: 1.05, verticalAnchor: 'center', horizontalAnchor: 'center', allowHorizontalOverflow: false };
+            fitOpts = { minReadableScale: 0.88, maxScale: 1.05, verticalAnchor: 'center', horizontalAnchor: 'center', allowHorizontalOverflow: false, animate: true, duration: 250 };
           } else {
-            fitOpts = { minReadableScale: 0.85, maxScale: 1.05, verticalAnchor: 'center', horizontalAnchor: 'center', allowHorizontalOverflow: false };
+            fitOpts = { minReadableScale: 0.85, maxScale: 1.05, verticalAnchor: 'center', horizontalAnchor: 'center', allowHorizontalOverflow: false, animate: true, duration: 250 };
           }
           scheduleViewportAction(function () {
             return fitCanvasToViewport(48, fitOpts);
@@ -2913,7 +2951,9 @@
             maxScale: (activeStep && typeof activeStep.maxScale === 'number') ? activeStep.maxScale : 1.05,
             verticalAnchor: (activeStep && activeStep.verticalAnchor) ? activeStep.verticalAnchor : 'auto',
             horizontalAnchor: (activeStep && activeStep.horizontalAnchor) ? activeStep.horizontalAnchor : 'auto',
-            allowHorizontalOverflow: (activeStep && typeof activeStep.allowHorizontalOverflow === 'boolean') ? activeStep.allowHorizontalOverflow : true
+            allowHorizontalOverflow: (activeStep && typeof activeStep.allowHorizontalOverflow === 'boolean') ? activeStep.allowHorizontalOverflow : true,
+            animate: true,
+            duration: 250
           };
           scheduleViewportAction(function () {
             return fitSubtreeToViewport(rootUids, fitOpts);
@@ -3036,10 +3076,8 @@
       }
     });
 
-    // 视口平移与缩放后，实时同步关联线高亮与隐现状态，并防抖记忆当前相机坐标
+    // 视口平移与缩放后，防抖记忆当前相机坐标（漫游过程中剥离高频 DOM 操作，保持纯 GPU 硬件加速）
     mindMapInstance.on('view_after_render', function () {
-      syncAssociativeLinesState();
-      updateNexusLines();
       scheduleSaveCognitiveState();
     });
 
@@ -3070,7 +3108,9 @@
     });
 
     mindMapInstance.on('scale', function () {
-      updateNexusLines();
+      if (structureController && typeof structureController.updateZoomDisplay === 'function') {
+        structureController.updateZoomDisplay();
+      }
     });
 
     if (mindMapInstance.associativeLine) {
@@ -4194,7 +4234,8 @@
       if (targetLayerMode === 'subject_macro') {
         enterSubjectMacroLayer({
           subject: reqSubject,
-          preserveExpandState: preserveExpandState
+          preserveExpandState: preserveExpandState,
+          skipCrossFade: true
         });
         if (restoreSavedViewport && savedState && savedState.viewports) {
           var savedMacroVp = savedState.viewports['macro_' + reqSubject];
@@ -4207,7 +4248,8 @@
         }
       } else if (currentChapterId !== targetChapterId) {
         loadChapter(targetChapterId, {
-          preserveExpandState: preserveExpandState
+          preserveExpandState: preserveExpandState,
+          skipCrossFade: true
         });
         if (restoreSavedViewport && savedState && savedState.viewports && savedState.viewports[targetChapterId]) {
           var savedChVp = savedState.viewports[targetChapterId];

@@ -139,8 +139,21 @@ async function captureScreenshot(ws, filename) {
   const res = await sendCDP(ws, 'Page.captureScreenshot', { format: 'png' }, ++cdpSeq);
   if (res && res.data) {
     const filePath = path.join(ARTIFACTS_DIR, filename);
-    fs.writeFileSync(filePath, Buffer.from(res.data, 'base64'));
-    console.log(`  [Screenshot] 已保存真机截屏: ${filename}`);
+    const buf = Buffer.from(res.data, 'base64');
+    let written = false;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        fs.writeFileSync(filePath, buf);
+        written = true;
+        break;
+      } catch (err) {
+        if (attempt === 4) throw err;
+        await sleep(100);
+      }
+    }
+    if (written) {
+      console.log(`  [Screenshot] 已保存真机截屏: ${filename}`);
+    }
   }
 }
 

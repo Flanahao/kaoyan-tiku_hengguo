@@ -46,6 +46,14 @@
   background-size: 22px 22px;
 }
 
+#cognitiveMindMapContainer.mm-canvas-crossfade {
+  transition: opacity 60ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#cognitiveMindMapContainer.mm-canvas-fadeout {
+  opacity: 0.05 !important;
+}
+
 #cognitiveMindMapContainer foreignObject {
   overflow: visible !important;
 }
@@ -208,6 +216,12 @@
   opacity: 1 !important;
 }
 
+/* 原树拓扑剪枝聚拢模式下：无关分支已剪枝隐藏，保留的骨架祖先与展开的一层细节子项保持 100% 清晰可读 */
+.smm-node-container.has-resonance-focus.is-cluster-mode .smm-node .mm-node-card {
+  opacity: 1 !important;
+}
+
+
 /* ─────────────────────────────────────────────────────────────
    4. 关联线视觉净化 (清除箭头，展示优雅平滑贝塞尔曲线)
    ───────────────────────────────────────────────────────────── */
@@ -237,8 +251,9 @@
 
 .smm-associative-line-container path.smm-associative-line-path {
   stroke-dasharray: none !important; /* 彻底实线化，杜绝虚线杂乱 */
-  transition: stroke-width 0.18s ease, stroke 0.18s ease, opacity 0.18s ease;
+  transition: stroke-width 0.22s ease, stroke 0.22s ease, opacity 0.22s ease, filter 0.22s ease;
   pointer-events: none !important;
+  filter: drop-shadow(0 0 2.5px rgba(64, 104, 235, 0.4));
 }
 
 .smm-associative-line-container path.smm-associative-line-click-path {
@@ -257,15 +272,17 @@
   opacity: 1 !important;
   visibility: visible !important;
   stroke: #3370ff !important;
-  stroke-width: 2.4px !important;
-  filter: drop-shadow(0 2px 6px rgba(51, 112, 255, 0.45));
+  stroke-width: 2.6px !important;
+  filter: drop-shadow(0 0 4px rgba(51, 112, 255, 0.85)) drop-shadow(0 0 10px rgba(51, 112, 255, 0.45));
+  animation: smmLinePulseGlow 2.4s ease-in-out infinite;
 }
 
 /* 常态显示状态下的层级区分：常态柔和降噪，悬停/聚焦高亮激活 */
 .smm-associative-line-container:not(.is-global-muted) path.smm-associative-line-path {
-  opacity: 0.38;
+  opacity: 0.42;
   stroke: #4068eb;
-  stroke-width: 1.45px;
+  stroke-width: 1.5px;
+  filter: drop-shadow(0 0 2.5px rgba(64, 104, 235, 0.35));
 }
 
 .smm-associative-line-container:not(.is-global-muted).has-hover-selection:not(.has-active-selection) path.smm-associative-line-path:not(.is-hover-line) {
@@ -275,8 +292,8 @@
 .smm-associative-line-container:not(.is-global-muted).has-hover-selection:not(.has-active-selection) path.smm-associative-line-path.is-hover-line {
   opacity: 0.96 !important;
   stroke: #3370ff !important;
-  stroke-width: 2.2px !important;
-  filter: drop-shadow(0 2px 5px rgba(51, 112, 255, 0.35));
+  stroke-width: 2.4px !important;
+  filter: drop-shadow(0 0 4px rgba(51, 112, 255, 0.75)) drop-shadow(0 0 8px rgba(51, 112, 255, 0.35));
 }
 
 .smm-associative-line-container:not(.is-global-muted).has-active-selection path.smm-associative-line-path:not(.is-active-line) {
@@ -286,8 +303,40 @@
 .smm-associative-line-container:not(.is-global-muted) path.smm-associative-line-path.is-active-line {
   opacity: 1 !important;
   stroke: #3370ff !important;
-  stroke-width: 2.4px !important;
-  filter: drop-shadow(0 2px 6px rgba(51, 112, 255, 0.45));
+  stroke-width: 2.6px !important;
+  filter: drop-shadow(0 0 4px rgba(51, 112, 255, 0.85)) drop-shadow(0 0 12px rgba(51, 112, 255, 0.45));
+  animation: smmLinePulseGlow 2.4s ease-in-out infinite;
+}
+
+/* 聚拢态激活关联线发光与描边增强，自适应避让密集卡片正面，确保关联线清晰透出 */
+#cognitiveMindMapContainer.is-cluster-mode .smm-associative-line-container path.smm-associative-line-path.is-active-line,
+.has-resonance-focus.is-cluster-mode path.smm-associative-line-path.is-active-line {
+  stroke-width: 2.8px !important;
+  animation: smmClusterLinePulseGlow 2.2s ease-in-out infinite !important;
+}
+
+@keyframes smmClusterLinePulseGlow {
+  0% {
+    filter: drop-shadow(0 0 4px rgba(51, 112, 255, 0.85)) drop-shadow(0 0 10px rgba(51, 112, 255, 0.45));
+  }
+  50% {
+    filter: drop-shadow(0 0 7px rgba(51, 112, 255, 1)) drop-shadow(0 0 16px rgba(51, 112, 255, 0.65));
+  }
+  100% {
+    filter: drop-shadow(0 0 4px rgba(51, 112, 255, 0.85)) drop-shadow(0 0 10px rgba(51, 112, 255, 0.45));
+  }
+}
+
+@keyframes smmLinePulseGlow {
+  0% {
+    filter: drop-shadow(0 0 3px rgba(51, 112, 255, 0.75)) drop-shadow(0 0 8px rgba(51, 112, 255, 0.35));
+  }
+  50% {
+    filter: drop-shadow(0 0 6px rgba(51, 112, 255, 0.95)) drop-shadow(0 0 14px rgba(51, 112, 255, 0.55));
+  }
+  100% {
+    filter: drop-shadow(0 0 3px rgba(51, 112, 255, 0.75)) drop-shadow(0 0 8px rgba(51, 112, 255, 0.35));
+  }
 }
 
 /* 彻底隐匿 SimpleMindMap 默认曲线编辑控制线与圆圈手柄，消除点击弹出两段水平线与圆圈 */
